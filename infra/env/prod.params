@@ -1,0 +1,14 @@
+# neo-01's OWN service (module 01: Application Verification), on prod. Identical to
+# dev.params — a module carries no environment-specific values (the orchestrator URL is built
+# from the Cloud Map namespace in the template). The pipeline adds EnvironmentName + the
+# PINNED @sha256 images + DbEndpoint + AlbDnsName.
+ServiceName=neo-01
+Role=module
+PathPrefix=/neo-01
+ListenerRulePriority=10
+DbName=neo_01
+ServiceId=neo01
+DisplayName=Application Verification
+Domain=verification
+Team=Team 01
+MockedDependencies=
