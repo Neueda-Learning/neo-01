@@ -3,8 +3,9 @@ package com.neobank.module.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -20,11 +21,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 /**
- * The three things the placeholder does, and the guard that keeps a failure reportable.
+ * UC-00 acceptance criteria (unit level — no Spring, no DB, no HTTP).
  *
- * <p>No Spring, no database, no HTTP — the service takes a request and calls two collaborators, so
- * the test is a handful of lines. Keep it that way as you replace the body: logic that needs a
- * running container to test is logic you will stop testing.</p>
+ * <p>The executor is replaced with {@code Runnable::run} so both the accept phase and the
+ * decide phase run inline and are immediately observable.</p>
  */
 class ApplicationServiceTest {
 
@@ -36,8 +36,9 @@ class ApplicationServiceTest {
     void setUp() {
         verificationRecords = mock(VerificationRecordRepository.class);
         orchestrator = mock(OrchestratorClient.class);
-        // Runnable::run — the work happens inline, so there is nothing to wait for.
         service = new ApplicationService(Runnable::run, verificationRecords, orchestrator);
+        // Default: not a duplicate, and save returns the entity unchanged.
+        when(verificationRecords.existsById(any())).thenReturn(false);
         when(verificationRecords.save(any(VerificationRecord.class))).thenAnswer(call -> call.getArgument(0));
     }
 
@@ -52,33 +53,42 @@ class ApplicationServiceTest {
         return new ApplicationRequest(id, "corr-1", "process-application", application);
     }
 
+    /** AC-2: row exists before 202; AC-6: decide starts after commit. */
     @Test
-    void storesTheApplicationAndReportsItAccepted() {
-        service.processApplication(request("SIM-01"));
+    void insertsInProgressThenDecidesToAccepted() {
+        service.processApplicationAsync(request("SIM-01"));
 
+        // Phase 1 (accept) → IN_PROGRESS; Phase 2 (decide) → ACCEPTED
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
-        verify(verificationRecords).save(saved.capture());
-        assertThat(saved.getValue().getApplicationId()).isEqualTo("SIM-01");
-        assertThat(saved.getValue().getOutcome()).isEqualTo("ACCEPTED");
+        verify(verificationRecords, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues().get(0).getOutcome()).isEqualTo("IN_PROGRESS");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("ACCEPTED");
+        assertThat(saved.getAllValues().get(0).getApplicationId()).isEqualTo("SIM-01");
 
         verify(orchestrator).applicationStatusUpdate("SIM-01", Decision.ACCEPTED,
                 "hello world from processApplication");
     }
 
+    /** AC-4: duplicate applicationId → no second insert, no second decision. */
     @Test
-    void theAsyncEntryPointDoesTheSameWorkThroughTheExecutor() {
-        service.processApplicationAsync(request("SIM-02"));
+    void idempotentForDuplicateApplicationId() {
+        when(verificationRecords.existsById("SIM-DUP")).thenReturn(true);
 
-        verify(verificationRecords).save(any(VerificationRecord.class));
-        verify(orchestrator).applicationStatusUpdate(eq("SIM-02"), eq(Decision.ACCEPTED), any());
+        service.processApplicationAsync(request("SIM-DUP"));
+
+        verify(verificationRecords, never()).save(any());
+        verifyNoMoreInteractions(orchestrator);
     }
 
+    /** Guard: a failure in the decide phase is still reported rather than timing out the journey. */
     @Test
-    void aFailureIsStillReportedRatherThanLeavingTheJourneyToTimeOut() {
-        doThrow(new IllegalStateException("database on fire"))
-                .when(verificationRecords).save(any(VerificationRecord.class));
+    void aFailureInTheDecidePhaseIsStillReportedAsReferred() {
+        // First save (IN_PROGRESS accept phase) succeeds; second (decide phase) throws.
+        when(verificationRecords.save(any(VerificationRecord.class)))
+                .thenAnswer(call -> call.getArgument(0))
+                .thenThrow(new IllegalStateException("database on fire"));
 
-        service.processApplication(request("SIM-03"));
+        service.processApplicationAsync(request("SIM-03"));
 
         ArgumentCaptor<String> comment = ArgumentCaptor.forClass(String.class);
         verify(orchestrator).applicationStatusUpdate(eq("SIM-03"), eq(Decision.REFERRED),
