@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -51,8 +52,13 @@ public class ApplicationController {
      * wrong.</p>
      */
     @PostMapping
-    public ResponseEntity<Map<String, Object>> processApplication(
+    public ResponseEntity<?> processApplication(
             @Valid @RequestBody ApplicationRequest request) {
+        if (!StringUtils.hasText(request.command())) {
+            Map<String, String> err = new LinkedHashMap<>();
+            err.put("message", "command must not be blank");
+            return ResponseEntity.badRequest().body(err);
+        }
         applications.processApplicationAsync(request);
         return ResponseEntity.accepted().body(ack(request));
     }

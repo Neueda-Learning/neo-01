@@ -84,6 +84,19 @@ class ApplicationControllerTest {
     }
 
     @Test
+    void rejectsAnEnvelopeWithNoCommand() throws Exception {
+        mvc.perform(post("/api/v1/applications")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"applicationId":"SIM-X","application":{"channel":"WEB"}}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("command")));
+
+        verifyNoInteractions(applications);
+    }
+
+    @Test
     void malformedDatesAreAcceptedBecauseJudgingThemIsTheModulesJob() throws Exception {
         // The sidecar's SIM-09 shape: every date in the wrong format, on purpose. It must reach the
         // service so the module can report WHICH field was malformed. Typing these as LocalDate
