@@ -1,11 +1,11 @@
 package com.neobank.module.service;
 
-import com.neobank.module.dto.DemoShowcaseView;
+import com.neobank.module.dto.VerificationRecordView;
 import com.neobank.module.integrations.orchestrator.ApplicationRequest;
 import com.neobank.module.integrations.orchestrator.OrchestratorClient;
 import com.neobank.module.model.Decision;
-import com.neobank.module.model.DemoShowcase;
-import com.neobank.module.repository.DemoShowcaseRepository;
+import com.neobank.module.model.VerificationRecord;
+import com.neobank.module.repository.VerificationRecordRepository;
 import java.util.List;
 import java.util.concurrent.Executor;
 import org.slf4j.Logger;
@@ -32,8 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <ol>
  *   <li><b>The log line</b> → whatever your module actually needs to say.</li>
- *   <li><b>The row</b> → your own table. {@link DemoShowcase} explains how; the short version is a
- *       new Liquibase change set and a new entity, not extra columns on {@code demo_showcase}.</li>
+ *   <li><b>The row</b> → your own table. Add a Liquibase change set and a new entity.</li>
  *   <li><b>The always-{@code ACCEPTED} status</b> → your rules. Read what you need off
  *       {@code request.application()} — it is fully typed, so your IDE will show you the fields —
  *       and return {@code ACCEPTED}, {@code REJECTED} or {@code REFERRED} with a reason a bank
@@ -47,7 +46,7 @@ public class ApplicationService {
     private static final Logger log = LoggerFactory.getLogger(ApplicationService.class);
 
     private final Executor executor;
-    private final DemoShowcaseRepository demoShowcase;
+    private final VerificationRecordRepository verificationRecords;
     private final OrchestratorClient orchestrator;
 
     /**
@@ -57,10 +56,10 @@ public class ApplicationService {
      * once.
      */
     public ApplicationService(@Qualifier("applicationTaskExecutor") Executor executor,
-                              DemoShowcaseRepository demoShowcase,
+                              VerificationRecordRepository verificationRecords,
                               OrchestratorClient orchestrator) {
         this.executor = executor;
-        this.demoShowcase = demoShowcase;
+        this.verificationRecords = verificationRecords;
         this.orchestrator = orchestrator;
     }
 
@@ -91,19 +90,17 @@ public class ApplicationService {
     void processApplication(ApplicationRequest request) {
         String applicationId = request.applicationId();
         try {
-            // 1 — say something. summary() is the one line every module logs on receipt.
-            log.info("Hello world from processApplication — {}", request.summary());
+            log.info("Processing application — {}", request.summary());
 
-            // 2 — store something. ⚠️ demo_showcase is a placeholder; see DemoShowcase.
-            demoShowcase.save(new DemoShowcase(applicationId, Decision.ACCEPTED));
+            // Only applicationId is stored. No applicant personal data enters this module's schema.
+            verificationRecords.save(new VerificationRecord(
+                    applicationId, Decision.ACCEPTED, "hello world from processApplication",
+                    null, null));
 
-            // 3 — report something. Always ACCEPTED until you write rules.
+            // Always ACCEPTED until you write rules.
             orchestrator.applicationStatusUpdate(applicationId, Decision.ACCEPTED,
                     "hello world from processApplication");
         } catch (RuntimeException e) {
-            // A module that throws never reports, and the orchestrator then waits out its 30s
-            // timeout and ends the journey FAILED with nothing to explain it. So: refer it to a
-            // human and say why. Keep this guard when you replace the body above.
             log.error("processApplication failed for {} — referring", applicationId, e);
             orchestrator.applicationStatusUpdate(applicationId, Decision.REFERRED,
                     "module error: " + e);
@@ -112,9 +109,9 @@ public class ApplicationService {
 
     /** Everything this module has answered, newest first — what its own UI reads. */
     @Transactional(readOnly = true)
-    public List<DemoShowcaseView> findAll() {
-        return demoShowcase.findAllByOrderByCreatedAtDescIdDesc().stream()
-                .map(DemoShowcaseView::of)
+    public List<VerificationRecordView> findAll() {
+        return verificationRecords.findAllByOrderByCreatedAtDesc().stream()
+                .map(VerificationRecordView::of)
                 .toList();
     }
 }

@@ -13,8 +13,8 @@ import com.neobank.module.integrations.orchestrator.Application;
 import com.neobank.module.integrations.orchestrator.ApplicationRequest;
 import com.neobank.module.integrations.orchestrator.OrchestratorClient;
 import com.neobank.module.model.Decision;
-import com.neobank.module.model.DemoShowcase;
-import com.neobank.module.repository.DemoShowcaseRepository;
+import com.neobank.module.model.VerificationRecord;
+import com.neobank.module.repository.VerificationRecordRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -28,17 +28,17 @@ import org.mockito.ArgumentCaptor;
  */
 class ApplicationServiceTest {
 
-    private DemoShowcaseRepository demoShowcase;
+    private VerificationRecordRepository verificationRecords;
     private OrchestratorClient orchestrator;
     private ApplicationService service;
 
     @BeforeEach
     void setUp() {
-        demoShowcase = mock(DemoShowcaseRepository.class);
+        verificationRecords = mock(VerificationRecordRepository.class);
         orchestrator = mock(OrchestratorClient.class);
         // Runnable::run — the work happens inline, so there is nothing to wait for.
-        service = new ApplicationService(Runnable::run, demoShowcase, orchestrator);
-        when(demoShowcase.save(any(DemoShowcase.class))).thenAnswer(call -> call.getArgument(0));
+        service = new ApplicationService(Runnable::run, verificationRecords, orchestrator);
+        when(verificationRecords.save(any(VerificationRecord.class))).thenAnswer(call -> call.getArgument(0));
     }
 
     private static ApplicationRequest request(String id) {
@@ -56,10 +56,10 @@ class ApplicationServiceTest {
     void storesTheApplicationAndReportsItAccepted() {
         service.processApplication(request("SIM-01"));
 
-        ArgumentCaptor<DemoShowcase> saved = ArgumentCaptor.forClass(DemoShowcase.class);
-        verify(demoShowcase).save(saved.capture());
+        ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
+        verify(verificationRecords).save(saved.capture());
         assertThat(saved.getValue().getApplicationId()).isEqualTo("SIM-01");
-        assertThat(saved.getValue().getStatus()).isEqualTo("ACCEPTED");
+        assertThat(saved.getValue().getOutcome()).isEqualTo("ACCEPTED");
 
         verify(orchestrator).applicationStatusUpdate("SIM-01", Decision.ACCEPTED,
                 "hello world from processApplication");
@@ -69,17 +69,14 @@ class ApplicationServiceTest {
     void theAsyncEntryPointDoesTheSameWorkThroughTheExecutor() {
         service.processApplicationAsync(request("SIM-02"));
 
-        verify(demoShowcase).save(any(DemoShowcase.class));
+        verify(verificationRecords).save(any(VerificationRecord.class));
         verify(orchestrator).applicationStatusUpdate(eq("SIM-02"), eq(Decision.ACCEPTED), any());
     }
 
     @Test
     void aFailureIsStillReportedRatherThanLeavingTheJourneyToTimeOut() {
-        // The failure mode this guard exists for: a module that throws never reports, and the
-        // orchestrator then waits out its 30s timeout and ends the journey FAILED with nothing to
-        // explain it. REFERRED with a reason is far more useful than silence.
         doThrow(new IllegalStateException("database on fire"))
-                .when(demoShowcase).save(any(DemoShowcase.class));
+                .when(verificationRecords).save(any(VerificationRecord.class));
 
         service.processApplication(request("SIM-03"));
 
@@ -92,14 +89,16 @@ class ApplicationServiceTest {
 
     @Test
     void theBoardShowsWhatWasStored() {
-        when(demoShowcase.findAllByOrderByCreatedAtDescIdDesc())
-                .thenReturn(java.util.List.of(new DemoShowcase("SIM-01", Decision.ACCEPTED)));
+        when(verificationRecords.findAllByOrderByCreatedAtDesc())
+                .thenReturn(java.util.List.of(new VerificationRecord(
+                        "SIM-01", Decision.ACCEPTED, "hello world from processApplication",
+                        null, null)));
 
         assertThat(service.findAll())
                 .singleElement()
                 .satisfies(view -> {
                     assertThat(view.applicationId()).isEqualTo("SIM-01");
-                    assertThat(view.status()).isEqualTo("ACCEPTED");
+                    assertThat(view.outcome()).isEqualTo("ACCEPTED");
                 });
     }
 }

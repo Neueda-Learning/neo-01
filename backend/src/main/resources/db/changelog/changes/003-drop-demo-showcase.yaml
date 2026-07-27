@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-drop-demo-showcase
+      author: neo-01
+      changes:
+        - dropTable:
+            tableName: demo_showcase
