@@ -1,10 +1,15 @@
 databaseChangeLog:
+
   - changeSet:
-      id: 002-create-verification-case
+      id: 002-create-product-config
       author: neo-01
+      comment: >
+        Insert-only versioned product rules. Each row is one immutable snapshot of the
+        rules for one product at one point in time. The highest version per product_code
+        is the current one. Never update or delete.
       changes:
         - createTable:
-            tableName: verification_case
+            tableName: product_config
             columns:
               - column:
                   name: id
@@ -14,55 +19,87 @@ databaseChangeLog:
                     primaryKey: true
                     nullable: false
               - column:
-                  # The id from the request ENVELOPE — matches what the orchestrator uses.
-                  name: application_id
-                  type: VARCHAR(64)
-                  constraints:
-                    nullable: false
-              - column:
-                  # ACCEPTED | REJECTED | REFERRED
-                  name: status
-                  type: VARCHAR(32)
-                  constraints:
-                    nullable: false
-              - column:
-                  # Human-readable reason suitable for a bank employee to relay to a customer.
-                  name: decision_reason
-                  type: VARCHAR(512)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: applicant_name
-                  type: VARCHAR(255)
-                  constraints:
-                    nullable: true
-              - column:
                   name: product_code
                   type: VARCHAR(64)
                   constraints:
-                    nullable: true
+                    nullable: false
               - column:
-                  # Requested credit limit in whole GBP.
-                  name: requested_limit
+                  name: version
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: min_age
                   type: INT
                   constraints:
                     nullable: true
               - column:
-                  # Whether the applicant accepted terms — a hard stop if false.
-                  name: terms_accepted
+                  name: limit_min
+                  type: INT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: limit_max
+                  type: INT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: active
                   type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: channels
+                  type: VARCHAR(255)
                   constraints:
                     nullable: true
               - column:
-                  # Identity document type: PASSPORT | NATIONAL_ID | DRIVING_LICENCE
-                  name: document_type
+                  name: effective_from
+                  type: DATETIME
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: product_config
+            columnNames: product_code, version
+            constraintName: uq_product_config_product_version
+
+  - changeSet:
+      id: 002-create-verification-record
+      author: neo-01
+      comment: >
+        One row per applicationId - the unique decision record for this module.
+        Only applicationId is stored from the application payload.
+        product_config_id pins the exact rule version used for the decision (nullable
+        when no config matched the product code).
+      changes:
+        - createTable:
+            tableName: verification_record
+            columns:
+              - column:
+                  name: application_id
+                  type: VARCHAR(64)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: outcome
                   type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reference
+                  type: VARCHAR(512)
                   constraints:
                     nullable: true
               - column:
-                  # Stored as a string; the module validates the date itself (see Application.java rule 1).
-                  name: document_expiry
-                  type: VARCHAR(32)
+                  name: product_config_id
+                  type: BIGINT
+                  constraints:
+                    nullable: true
+              - column:
+                  name: rule_results
+                  type: TEXT
                   constraints:
                     nullable: true
               - column:
@@ -70,3 +107,63 @@ databaseChangeLog:
                   type: DATETIME
                   constraints:
                     nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: verification_record
+            baseColumnNames: product_config_id
+            referencedTableName: product_config
+            referencedColumnNames: id
+            constraintName: fk_verification_record_product_config
+
+  - changeSet:
+      id: 002-create-override-log
+      author: neo-01
+      comment: >
+        Audit trail for manual overrides. Every row is permanent - never delete.
+        One verification_record may have many overrides (1:N).
+      changes:
+        - createTable:
+            tableName: override_log
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: application_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: old_outcome
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: new_outcome
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reason
+                  type: VARCHAR(512)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: operator
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: overridden_at
+                  type: DATETIME
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: override_log
+            baseColumnNames: application_id
+            referencedTableName: verification_record
+            referencedColumnNames: application_id
+            constraintName: fk_override_log_verification_record

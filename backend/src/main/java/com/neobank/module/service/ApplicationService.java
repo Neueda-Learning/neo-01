@@ -1,12 +1,11 @@
 package com.neobank.module.service;
 
-import com.neobank.module.dto.VerificationCaseView;
-import com.neobank.module.integrations.orchestrator.Application;
+import com.neobank.module.dto.VerificationRecordView;
 import com.neobank.module.integrations.orchestrator.ApplicationRequest;
 import com.neobank.module.integrations.orchestrator.OrchestratorClient;
 import com.neobank.module.model.Decision;
-import com.neobank.module.model.VerificationCase;
-import com.neobank.module.repository.VerificationCaseRepository;
+import com.neobank.module.model.VerificationRecord;
+import com.neobank.module.repository.VerificationRecordRepository;
 import java.util.List;
 import java.util.concurrent.Executor;
 import org.slf4j.Logger;
@@ -47,7 +46,7 @@ public class ApplicationService {
     private static final Logger log = LoggerFactory.getLogger(ApplicationService.class);
 
     private final Executor executor;
-    private final VerificationCaseRepository verificationCases;
+    private final VerificationRecordRepository verificationRecords;
     private final OrchestratorClient orchestrator;
 
     /**
@@ -57,10 +56,10 @@ public class ApplicationService {
      * once.
      */
     public ApplicationService(@Qualifier("applicationTaskExecutor") Executor executor,
-                              VerificationCaseRepository verificationCases,
+                              VerificationRecordRepository verificationRecords,
                               OrchestratorClient orchestrator) {
         this.executor = executor;
-        this.verificationCases = verificationCases;
+        this.verificationRecords = verificationRecords;
         this.orchestrator = orchestrator;
     }
 
@@ -93,19 +92,12 @@ public class ApplicationService {
         try {
             log.info("Processing application — {}", request.summary());
 
-            Application app = request.application();
-            String applicantName    = app != null && app.applicant()        != null ? app.applicant().fullName()              : null;
-            String productCode      = app != null && app.product()          != null ? app.product().productCode()             : null;
-            Integer requestedLimit  = app != null && app.product()          != null ? app.product().requestedCreditLimit()    : null;
-            Boolean termsAccepted   = app != null && app.consents()         != null ? app.consents().termsAccepted()          : null;
-            String documentType     = app != null && app.identityDocument() != null ? app.identityDocument().type()          : null;
-            String documentExpiry   = app != null && app.identityDocument() != null ? app.identityDocument().expiryDate()    : null;
-
-            verificationCases.save(new VerificationCase(
+            // Only applicationId is stored. No applicant personal data enters this module's schema.
+            verificationRecords.save(new VerificationRecord(
                     applicationId, Decision.ACCEPTED, "hello world from processApplication",
-                    applicantName, productCode, requestedLimit, termsAccepted, documentType, documentExpiry));
+                    null, null));
 
-            // 3 — report something. Always ACCEPTED until you write rules.
+            // Always ACCEPTED until you write rules.
             orchestrator.applicationStatusUpdate(applicationId, Decision.ACCEPTED,
                     "hello world from processApplication");
         } catch (RuntimeException e) {
@@ -117,9 +109,9 @@ public class ApplicationService {
 
     /** Everything this module has answered, newest first — what its own UI reads. */
     @Transactional(readOnly = true)
-    public List<VerificationCaseView> findAll() {
-        return verificationCases.findAllByOrderByCreatedAtDescIdDesc().stream()
-                .map(VerificationCaseView::of)
+    public List<VerificationRecordView> findAll() {
+        return verificationRecords.findAllByOrderByCreatedAtDesc().stream()
+                .map(VerificationRecordView::of)
                 .toList();
     }
 }

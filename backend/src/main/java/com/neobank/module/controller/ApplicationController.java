@@ -1,6 +1,6 @@
 package com.neobank.module.controller;
 
-import com.neobank.module.dto.VerificationCaseView;
+import com.neobank.module.dto.VerificationRecordView;
 import com.neobank.module.integrations.orchestrator.ApplicationRequest;
 import com.neobank.module.service.ApplicationService;
 import jakarta.validation.Valid;
@@ -83,7 +83,7 @@ public class ApplicationController {
      * orchestrator never calls it.
      */
     @GetMapping
-    public List<VerificationCaseView> list() {
+    public List<VerificationRecordView> list() {
         return applications.findAll();
     }
 }
