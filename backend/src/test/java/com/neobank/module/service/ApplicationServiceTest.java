@@ -13,8 +13,8 @@ import com.neobank.module.integrations.orchestrator.Application;
 import com.neobank.module.integrations.orchestrator.ApplicationRequest;
 import com.neobank.module.integrations.orchestrator.OrchestratorClient;
 import com.neobank.module.model.Decision;
-import com.neobank.module.model.DemoShowcase;
-import com.neobank.module.repository.DemoShowcaseRepository;
+import com.neobank.module.model.VerificationCase;
+import com.neobank.module.repository.VerificationCaseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -28,17 +28,17 @@ import org.mockito.ArgumentCaptor;
  */
 class ApplicationServiceTest {
 
-    private DemoShowcaseRepository demoShowcase;
+    private VerificationCaseRepository verificationCases;
     private OrchestratorClient orchestrator;
     private ApplicationService service;
 
     @BeforeEach
     void setUp() {
-        demoShowcase = mock(DemoShowcaseRepository.class);
+        verificationCases = mock(VerificationCaseRepository.class);
         orchestrator = mock(OrchestratorClient.class);
         // Runnable::run — the work happens inline, so there is nothing to wait for.
-        service = new ApplicationService(Runnable::run, demoShowcase, orchestrator);
-        when(demoShowcase.save(any(DemoShowcase.class))).thenAnswer(call -> call.getArgument(0));
+        service = new ApplicationService(Runnable::run, verificationCases, orchestrator);
+        when(verificationCases.save(any(VerificationCase.class))).thenAnswer(call -> call.getArgument(0));
     }
 
     private static ApplicationRequest request(String id) {
@@ -56,8 +56,8 @@ class ApplicationServiceTest {
     void storesTheApplicationAndReportsItAccepted() {
         service.processApplication(request("SIM-01"));
 
-        ArgumentCaptor<DemoShowcase> saved = ArgumentCaptor.forClass(DemoShowcase.class);
-        verify(demoShowcase).save(saved.capture());
+        ArgumentCaptor<VerificationCase> saved = ArgumentCaptor.forClass(VerificationCase.class);
+        verify(verificationCases).save(saved.capture());
         assertThat(saved.getValue().getApplicationId()).isEqualTo("SIM-01");
         assertThat(saved.getValue().getStatus()).isEqualTo("ACCEPTED");
 
@@ -69,17 +69,14 @@ class ApplicationServiceTest {
     void theAsyncEntryPointDoesTheSameWorkThroughTheExecutor() {
         service.processApplicationAsync(request("SIM-02"));
 
-        verify(demoShowcase).save(any(DemoShowcase.class));
+        verify(verificationCases).save(any(VerificationCase.class));
         verify(orchestrator).applicationStatusUpdate(eq("SIM-02"), eq(Decision.ACCEPTED), any());
     }
 
     @Test
     void aFailureIsStillReportedRatherThanLeavingTheJourneyToTimeOut() {
-        // The failure mode this guard exists for: a module that throws never reports, and the
-        // orchestrator then waits out its 30s timeout and ends the journey FAILED with nothing to
-        // explain it. REFERRED with a reason is far more useful than silence.
         doThrow(new IllegalStateException("database on fire"))
-                .when(demoShowcase).save(any(DemoShowcase.class));
+                .when(verificationCases).save(any(VerificationCase.class));
 
         service.processApplication(request("SIM-03"));
 
@@ -92,8 +89,10 @@ class ApplicationServiceTest {
 
     @Test
     void theBoardShowsWhatWasStored() {
-        when(demoShowcase.findAllByOrderByCreatedAtDescIdDesc())
-                .thenReturn(java.util.List.of(new DemoShowcase("SIM-01", Decision.ACCEPTED)));
+        when(verificationCases.findAllByOrderByCreatedAtDescIdDesc())
+                .thenReturn(java.util.List.of(new VerificationCase(
+                        "SIM-01", Decision.ACCEPTED, "hello world from processApplication",
+                        "Maria Nowak", "CREDIT_CARD_REWARDS", 3000, true, "PASSPORT", "2030-01-01")));
 
         assertThat(service.findAll())
                 .singleElement()

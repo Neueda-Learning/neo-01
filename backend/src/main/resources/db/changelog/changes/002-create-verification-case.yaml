@@ -1,0 +1,72 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-create-verification-case
+      author: neo-01
+      changes:
+        - createTable:
+            tableName: verification_case
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  # The id from the request ENVELOPE — matches what the orchestrator uses.
+                  name: application_id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  # ACCEPTED | REJECTED | REFERRED
+                  name: status
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  # Human-readable reason suitable for a bank employee to relay to a customer.
+                  name: decision_reason
+                  type: VARCHAR(512)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: applicant_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: product_code
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: true
+              - column:
+                  # Requested credit limit in whole GBP.
+                  name: requested_limit
+                  type: INT
+                  constraints:
+                    nullable: true
+              - column:
+                  # Whether the applicant accepted terms — a hard stop if false.
+                  name: terms_accepted
+                  type: BOOLEAN
+                  constraints:
+                    nullable: true
+              - column:
+                  # Identity document type: PASSPORT | NATIONAL_ID | DRIVING_LICENCE
+                  name: document_type
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: true
+              - column:
+                  # Stored as a string; the module validates the date itself (see Application.java rule 1).
+                  name: document_expiry
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: created_at
+                  type: DATETIME
+                  constraints:
+                    nullable: false
