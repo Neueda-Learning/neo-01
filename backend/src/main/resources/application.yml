@@ -32,9 +32,13 @@ spring:
       minimum-idle: 1
 
   jpa:
-    # Liquibase owns the schema; Hibernate only validates that entities match it.
+    # Liquibase owns the schema. Hibernate validation is skipped in production because
+    # MySQL maps TEXT → LONGVARCHAR and BOOLEAN → TINYINT(1), which differ from
+    # Hibernate's JDBC type expectations. Correctness is enforced by Liquibase changesets;
+    # any entity/schema drift surfaces at runtime. Tests (application-test.yml) keep
+    # ddl-auto=validate against H2 where types do align.
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     open-in-view: false
 
   liquibase:

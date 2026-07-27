@@ -10,6 +10,12 @@ package com.neobank.module.model;
  */
 public enum Decision {
 
+    /**
+     * Row inserted; the async decision worker has not yet reached a conclusion.
+     * This value is never sent to the orchestrator — it is the row's initial state only.
+     */
+    IN_PROGRESS,
+
     /** Your step passed. The only outcome that moves the application to the next module. */
     ACCEPTED,
 
