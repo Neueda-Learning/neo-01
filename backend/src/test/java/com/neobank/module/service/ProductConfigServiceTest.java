@@ -58,6 +58,33 @@ class ProductConfigServiceTest {
     }
 
     @Test
+    void returnsCreditCardRewardsVersionHistoryWithCurrentCheckpoint() {
+        repository.save(new ProductConfig(
+                "CREDIT_CARD_REWARDS", 1, 18, 1000, 10000, true, "WEB,MOBILE_APP,BRANCH",
+                Instant.parse("2026-07-01T00:00:00Z")));
+
+        service.createVersion(request("CREDIT_CARD_REWARDS", 18, 1200, 11000, true,
+                List.of("WEB", "MOBILE_APP", "BRANCH")));
+        service.createVersion(request("CREDIT_CARD_REWARDS", 19, 1500, 12000, true,
+                List.of("WEB", "MOBILE_APP", "BRANCH", "PHONE")));
+        service.createVersion(request("CREDIT_CARD_REWARDS", 20, 2000, 15000, false,
+                List.of("WEB", "BRANCH")));
+
+        List<ProductVersionView> versions = service.getVersions("CREDIT_CARD_REWARDS");
+
+        assertThat(versions).hasSize(4);
+        assertThat(versions).extracting(ProductVersionView::version).containsExactly(1, 2, 3, 4);
+        assertThat(versions).extracting(ProductVersionView::current).containsExactly(false, false, false, true);
+        assertThat(versions.getFirst().minAge()).isEqualTo(18);
+        assertThat(versions.getFirst().limitMin()).isEqualTo(1000);
+        assertThat(versions.getFirst().limitMax()).isEqualTo(10000);
+        assertThat(versions.getFirst().active()).isTrue();
+        assertThat(versions.getFirst().channels()).containsExactly("WEB", "MOBILE_APP", "BRANCH");
+        assertThat(versions.get(3).active()).isFalse();
+        assertThat(versions.get(3).channels()).containsExactly("WEB", "BRANCH");
+    }
+
+    @Test
     void returnsAllProductCodes() {
         repository.save(new ProductConfig("PRODUCT_A", 1, 18, 500, 5000, true, "WEB", Instant.now()));
         repository.save(new ProductConfig("PRODUCT_B", 1, 21, 1000, 10000, true, "MOBILE_APP", Instant.now()));
@@ -109,13 +136,13 @@ class ProductConfigServiceTest {
 
         List<ProductVersionView> versions = service.getVersions("SEED_TEST");
         assertThat(versions).hasSize(1);
-        assertThat(versions.get(0).version()).isEqualTo(1);
-        assertThat(versions.get(0).minAge()).isEqualTo(18);
-        assertThat(versions.get(0).limitMin()).isEqualTo(1000);
-        assertThat(versions.get(0).limitMax()).isEqualTo(10000);
-        assertThat(versions.get(0).active()).isTrue();
-        assertThat(versions.get(0).channels()).containsExactly("WEB", "MOBILE_APP", "BRANCH");
-        assertThat(versions.get(0).current()).isTrue();
+        assertThat(versions.getFirst().version()).isEqualTo(1);
+        assertThat(versions.getFirst().minAge()).isEqualTo(18);
+        assertThat(versions.getFirst().limitMin()).isEqualTo(1000);
+        assertThat(versions.getFirst().limitMax()).isEqualTo(10000);
+        assertThat(versions.getFirst().active()).isTrue();
+        assertThat(versions.getFirst().channels()).containsExactly("WEB", "MOBILE_APP", "BRANCH");
+        assertThat(versions.getFirst().current()).isTrue();
     }
 
     private static CreateProductVersionRequest request(String productCode, int minAge, int limitMin, int limitMax, boolean active, List<String> channels) {

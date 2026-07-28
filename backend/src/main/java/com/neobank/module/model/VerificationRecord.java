@@ -11,9 +11,8 @@ import java.time.Instant;
 /**
  * The module's single decision record for one application.
  *
- * <p><b>Only {@code applicationId} is stored from the application payload.</b> No applicant name,
- * date of birth, address or any other personal data belongs in this table. The id is the only
- * handle back to the orchestrator's copy of the full form.</p>
+ * <p>Stores {@code applicationId} and {@code fullName} from the application payload.
+ * The id is the key back to the orchestrator's copy of the full form.</p>
  *
  * <p>One row per application — {@code applicationId} is the primary key, so a duplicate
  * {@code POST} will fail at the database rather than silently overwrite a decision.</p>
@@ -51,6 +50,10 @@ public class VerificationRecord {
     @Column(name = "rule_results")
     private String ruleResults;
 
+    /** Applicant's full name — stored for search/display purposes. */
+    @Column(name = "full_name", length = 255)
+    private String fullName;
+
     /** When this module answered. */
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -60,12 +63,13 @@ public class VerificationRecord {
     }
 
     public VerificationRecord(String applicationId, Decision outcome, String reference,
-                              Long productConfigId, String ruleResults) {
+                              Long productConfigId, String ruleResults, String fullName) {
         this.applicationId = applicationId;
         this.outcome = outcome.name();
         this.reference = reference;
         this.productConfigId = productConfigId;
         this.ruleResults = ruleResults;
+        this.fullName = fullName;
     }
 
     @PrePersist
@@ -80,5 +84,6 @@ public class VerificationRecord {
     public String getReference()     { return reference; }
     public Long getProductConfigId() { return productConfigId; }
     public String getRuleResults()   { return ruleResults; }
+    public String getFullName()      { return fullName; }
     public Instant getCreatedAt()    { return createdAt; }
 }
