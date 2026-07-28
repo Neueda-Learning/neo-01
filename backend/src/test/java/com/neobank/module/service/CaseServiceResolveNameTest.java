@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
 /**
@@ -34,10 +36,15 @@ class CaseServiceResolveNameTest {
     }
 
     @Test
-    void emptyQueryReturnsEmptyWithoutHittingDb() {
+    void emptyQueryReturnsAllRecords() {
+        VerificationRecord rec = new VerificationRecord(
+                "SIM-01", Decision.ACCEPTED, "ok", null, null, "Maria Chen");
+        when(repo.findAll(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(rec)));
+
         Map<String, Object> result = service.search("", 10);
 
-        assertThat(result.get("cases")).asList().isEmpty();
+        assertThat(result.get("cases")).asList().hasSize(1);
         assertThat(result.get("more")).isEqualTo(false);
     }
 
