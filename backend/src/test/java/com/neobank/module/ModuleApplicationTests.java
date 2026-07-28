@@ -71,7 +71,12 @@ class ModuleApplicationTests {
                 "applicationId": "%s",
                 "channel": "MOBILE_APP",
                 "submittedAt": "2026-07-25T09:14:00Z",
-                "applicant": {"fullName": "Maria Nowak", "dateOfBirth": "1996-04-11"},
+                                                                "applicant": {
+                                                                        "fullName": "Maria Nowak",
+                                                                        "dateOfBirth": "1996-04-11",
+                                                                        "email": "maria.nowak@example.com",
+                                                                        "mobile": "+447700900111"
+                                                                },
                                 "product": {"productCode": "CREDIT_CARD_REWARDS", "requestedCreditLimit": 3000},
                                 "consents": {"termsAccepted": true}
               }

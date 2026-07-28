@@ -17,6 +17,7 @@ import com.neobank.module.repository.VerificationRecordRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Period;
+import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -58,6 +59,13 @@ public class ApplicationService {
     private static final String RULE_AGE = "age";
     private static final String RULE_PRODUCT_ACTIVE = "productActive";
     private static final String RULE_CHANNEL = "channel";
+    private static final Set<String> SUPPORTED_TAX_RESIDENCIES = Set.of("GB");
+    private static final Set<String> HIGH_RISK_COUNTRIES = Set.of("IR");
+    private static final Set<String> EXACT_NAME_BLOCKLIST = Set.of("VIKTOR PETROV");
+    private static final int MIN_PARTIAL_NAME_PREFIX = 5;
+    private static final int MIN_ANNUAL_INCOME = 20000;
+    private static final String PRODUCT_CODE_STUDENT = "CREDIT_CARD_STUDENT";
+    private static final double DTI_REJECT_THRESHOLD = 0.45;
 
     private final Executor executor;
     private final VerificationRecordRepository verificationRecords;
@@ -241,6 +249,35 @@ public class ApplicationService {
                 reasonsOrAllPassed(channelReasons)));
         hardFailure = hardFailure || !channelReasons.isEmpty();
 
+        HighRiskEvaluation highRiskEvaluation = evaluateHighRiskCountry(app);
+        reviewFlag = reviewFlag || highRiskEvaluation.reviewFlag();
+        if (!highRiskEvaluation.reasons().isEmpty()) {
+            JsonNode wellFormednessRule = ruleResults.get(0);
+            ArrayNode reasonCodes = (ArrayNode) wellFormednessRule.get("reasonCodes");
+            if (reasonCodes.size() == 1 && "VER_ALL_CHECKS_PASSED".equals(reasonCodes.get(0).asText())) {
+                reasonCodes.removeAll();
+            }
+            for (String reason : highRiskEvaluation.reasons()) {
+                reasonCodes.add(reason);
+            }
+            ((ObjectNode) wellFormednessRule).put("passed", false);
+        }
+
+        NameEvaluation nameEvaluation = evaluateNameMatch(app);
+        hardFailure = hardFailure || nameEvaluation.hardFailure();
+        reviewFlag = reviewFlag || nameEvaluation.reviewFlag();
+        if (!nameEvaluation.reasons().isEmpty()) {
+            JsonNode wellFormednessRule = ruleResults.get(0);
+            ArrayNode reasonCodes = (ArrayNode) wellFormednessRule.get("reasonCodes");
+            if (reasonCodes.size() == 1 && "VER_ALL_CHECKS_PASSED".equals(reasonCodes.get(0).asText())) {
+                reasonCodes.removeAll();
+            }
+            for (String reason : nameEvaluation.reasons()) {
+                reasonCodes.add(reason);
+            }
+            ((ObjectNode) wellFormednessRule).put("passed", false);
+        }
+
         LimitEvaluation limitEvaluation = evaluateRequestedLimit(app, config);
         hardFailure = hardFailure || limitEvaluation.hardFailure();
         reviewFlag = reviewFlag || limitEvaluation.reviewFlag();
@@ -253,6 +290,36 @@ public class ApplicationService {
                 reasonCodes.removeAll();
             }
             for (String reason : limitEvaluation.reasons()) {
+                reasonCodes.add(reason);
+            }
+            ((ObjectNode) wellFormednessRule).put("passed", false);
+        }
+
+        AffordabilityEvaluation affordabilityEvaluation = evaluateAffordability(app);
+        hardFailure = hardFailure || affordabilityEvaluation.hardFailure();
+        reviewFlag = reviewFlag || affordabilityEvaluation.reviewFlag();
+        if (!affordabilityEvaluation.reasons().isEmpty()) {
+            JsonNode wellFormednessRule = ruleResults.get(0);
+            ArrayNode reasonCodes = (ArrayNode) wellFormednessRule.get("reasonCodes");
+            if (reasonCodes.size() == 1 && "VER_ALL_CHECKS_PASSED".equals(reasonCodes.get(0).asText())) {
+                reasonCodes.removeAll();
+            }
+            for (String reason : affordabilityEvaluation.reasons()) {
+                reasonCodes.add(reason);
+            }
+            ((ObjectNode) wellFormednessRule).put("passed", false);
+        }
+
+        DeliveryEvaluation deliveryEvaluation = evaluateDelivery(app);
+        hardFailure = hardFailure || deliveryEvaluation.hardFailure();
+        reviewFlag = reviewFlag || deliveryEvaluation.reviewFlag();
+        if (!deliveryEvaluation.reasons().isEmpty()) {
+            JsonNode wellFormednessRule = ruleResults.get(0);
+            ArrayNode reasonCodes = (ArrayNode) wellFormednessRule.get("reasonCodes");
+            if (reasonCodes.size() == 1 && "VER_ALL_CHECKS_PASSED".equals(reasonCodes.get(0).asText())) {
+                reasonCodes.removeAll();
+            }
+            for (String reason : deliveryEvaluation.reasons()) {
                 reasonCodes.add(reason);
             }
             ((ObjectNode) wellFormednessRule).put("passed", false);
@@ -301,6 +368,28 @@ public class ApplicationService {
             } else if (!isIsoDate(app.applicant().dateOfBirth())) {
                 reasons.add("VER_INVALID_FIELD:applicant.dateOfBirth");
             }
+            if (!hasText(app.applicant().email())) {
+                reasons.add("VER_MISSING_FIELD:applicant.email");
+            }
+            if (!hasText(app.applicant().mobile())) {
+                reasons.add("VER_MISSING_FIELD:applicant.mobile");
+            }
+            if (app.applicant().currentAddress() != null
+                    && !hasText(app.applicant().currentAddress().postcode())) {
+                reasons.add("VER_MISSING_FIELD:applicant.currentAddress.postcode");
+            }
+            if (app.applicant().taxResidencies() != null
+                    && app.applicant().taxResidencies().stream()
+                            .filter(this::hasText)
+                            .map(String::toUpperCase)
+                            .anyMatch(code -> !SUPPORTED_TAX_RESIDENCIES.contains(code))) {
+                reasons.add("VER_TAX_RESIDENCY_NOT_SUPPORTED");
+            }
+
+        }
+
+        if (app.employment() != null && !hasText(app.employment().employerName())) {
+            reasons.add("VER_MISSING_FIELD:employment.employerName");
         }
 
         if (app.product() == null) {
@@ -320,6 +409,32 @@ public class ApplicationService {
             reasons.add("VER_TERMS_NOT_ACCEPTED");
         }
 
+        if (app.identityDocument() != null) {
+            if (!hasText(app.identityDocument().documentId())) {
+                reasons.add("VER_MISSING_FIELD:identityDocument.documentId");
+            }
+            if (!hasText(app.identityDocument().issuingCountry())) {
+                reasons.add("VER_MISSING_FIELD:identityDocument.issuingCountry");
+            }
+            if (hasText(app.identityDocument().documentId()) && hasText(app.identityDocument().issuingCountry())) {
+                String expectedPrefix = app.identityDocument().issuingCountry().toUpperCase();
+                String actualDocumentId = app.identityDocument().documentId().toUpperCase();
+                if (!actualDocumentId.startsWith(expectedPrefix)) {
+                    reasons.add("VER_INVALID_FIELD:identityDocument.documentId");
+                }
+            }
+            if (!hasText(app.identityDocument().expiryDate())) {
+                reasons.add("VER_MISSING_FIELD:identityDocument.expiryDate");
+            } else if (!isIsoDate(app.identityDocument().expiryDate())) {
+                reasons.add("VER_INVALID_FIELD:identityDocument.expiryDate");
+            } else {
+                LocalDate expiryDate = LocalDate.parse(app.identityDocument().expiryDate());
+                if (expiryDate.isBefore(LocalDate.now(Clock.systemUTC()))) {
+                    reasons.add("VER_ID_DOCUMENT_EXPIRED");
+                }
+            }
+        }
+
         return reasons;
     }
 
@@ -337,10 +452,149 @@ public class ApplicationService {
         if (max != null && requestedLimit > max) {
             return new LimitEvaluation(true, false, List.of("VER_LIMIT_ABOVE_MAXIMUM"));
         }
-        if (max != null && requestedLimit.equals(max)) {
-            return new LimitEvaluation(false, true, List.of("VER_LIMIT_EXACT_MAXIMUM"));
-        }
         return new LimitEvaluation(false, false, List.of());
+    }
+
+    private NameEvaluation evaluateNameMatch(Application app) {
+        if (app == null || app.applicant() == null || !hasText(app.applicant().fullName())) {
+            return new NameEvaluation(false, false, List.of());
+        }
+
+        String normalizedCandidate = normalizeName(app.applicant().fullName());
+        if (EXACT_NAME_BLOCKLIST.contains(normalizedCandidate)) {
+            return new NameEvaluation(true, false, List.of("VER_NAME_EXACT_MATCH"));
+        }
+
+        for (String blocked : EXACT_NAME_BLOCKLIST) {
+            if (isPartialNameMatch(normalizedCandidate, blocked)) {
+                return new NameEvaluation(false, true, List.of("VER_NAME_PARTIAL_MATCH"));
+            }
+        }
+        return new NameEvaluation(false, false, List.of());
+    }
+
+    private AffordabilityEvaluation evaluateAffordability(Application app) {
+        if (app == null || app.finances() == null) {
+            return new AffordabilityEvaluation(false, false, List.of());
+        }
+        Integer annualIncome = app.finances().annualIncome();
+        Integer monthlyHousingCost = app.finances().monthlyHousingCost();
+        Integer existingCreditCommitments = app.finances().existingCreditCommitments();
+        if (annualIncome == null || monthlyHousingCost == null || existingCreditCommitments == null
+                || annualIncome <= 0) {
+            return new AffordabilityEvaluation(false, false, List.of());
+        }
+
+        String productCode = app.product() == null ? null : app.product().productCode();
+        int minAnnualIncome = minimumIncomeForProduct(productCode);
+        if (annualIncome < minAnnualIncome) {
+            return new AffordabilityEvaluation(true, false, List.of("VER_INCOME_BELOW_MINIMUM"));
+        }
+
+        double monthlyIncome = annualIncome / 12.0;
+        double dti = (monthlyHousingCost + existingCreditCommitments) / monthlyIncome;
+        if (dti >= DTI_REJECT_THRESHOLD) {
+            return new AffordabilityEvaluation(true, false, List.of("VER_AFFORDABILITY_DTI_TOO_HIGH"));
+        }
+        return new AffordabilityEvaluation(false, false, List.of());
+    }
+
+    private int minimumIncomeForProduct(String productCode) {
+        if (PRODUCT_CODE_STUDENT.equals(productCode)) {
+            return 0;
+        }
+        return MIN_ANNUAL_INCOME;
+    }
+
+    private DeliveryEvaluation evaluateDelivery(Application app) {
+        if (app == null || app.delivery() == null) {
+            return new DeliveryEvaluation(false, false, List.of());
+        }
+
+        if (Boolean.FALSE.equals(app.delivery().useCurrentAddress())) {
+            Application.Address address = app.delivery().address();
+            if (address == null) {
+                return new DeliveryEvaluation(true, false, List.of("VER_MISSING_FIELD:delivery.address"));
+            }
+
+            List<String> missing = new java.util.ArrayList<>();
+            if (!hasText(address.line1())) {
+                missing.add("VER_MISSING_FIELD:delivery.address.line1");
+            }
+            if (!hasText(address.city())) {
+                missing.add("VER_MISSING_FIELD:delivery.address.city");
+            }
+            if (!hasText(address.postcode())) {
+                missing.add("VER_MISSING_FIELD:delivery.address.postcode");
+            }
+            if (!hasText(address.country())) {
+                missing.add("VER_MISSING_FIELD:delivery.address.country");
+            }
+            if (!missing.isEmpty()) {
+                return new DeliveryEvaluation(true, false, missing);
+            }
+
+            // Alternate delivery addresses are allowed, but require manual review.
+            return new DeliveryEvaluation(false, true, List.of("VER_DELIVERY_ALTERNATE_ADDRESS_REVIEW"));
+        }
+        return new DeliveryEvaluation(false, false, List.of());
+    }
+
+    private HighRiskEvaluation evaluateHighRiskCountry(Application app) {
+        if (app == null) {
+            return new HighRiskEvaluation(false, List.of());
+        }
+
+        boolean isHighRisk = false;
+        if (app.applicant() != null) {
+            isHighRisk = isHighRiskCountry(app.applicant().nationality())
+                    || isHighRiskCountry(app.applicant().countryOfResidence())
+                    || (app.applicant().taxResidencies() != null
+                            && app.applicant().taxResidencies().stream().anyMatch(this::isHighRiskCountry));
+        }
+        if (!isHighRisk && app.identityDocument() != null) {
+            isHighRisk = isHighRiskCountry(app.identityDocument().issuingCountry());
+        }
+
+        if (isHighRisk) {
+            return new HighRiskEvaluation(true, List.of("VER_HIGH_RISK_COUNTRY"));
+        }
+        return new HighRiskEvaluation(false, List.of());
+    }
+
+    private boolean isPartialNameMatch(String candidate, String blocked) {
+        String[] candidateParts = candidate.split(" ");
+        String[] blockedParts = blocked.split(" ");
+        if (candidateParts.length < 2 || blockedParts.length < 2) {
+            return false;
+        }
+
+        String candidateFirst = candidateParts[0];
+        String blockedFirst = blockedParts[0];
+        String candidateLast = candidateParts[candidateParts.length - 1];
+        String blockedLast = blockedParts[blockedParts.length - 1];
+
+        boolean firstNameSimilar = hasSharedPrefix(candidateFirst, blockedFirst, MIN_PARTIAL_NAME_PREFIX);
+        boolean lastNameSimilar = hasSharedPrefix(candidateLast, blockedLast, MIN_PARTIAL_NAME_PREFIX);
+        return firstNameSimilar && lastNameSimilar;
+    }
+
+    private boolean hasSharedPrefix(String left, String right, int minLength) {
+        int max = Math.min(left.length(), right.length());
+        int count = 0;
+        for (int i = 0; i < max; i++) {
+            if (left.charAt(i) != right.charAt(i)) {
+                break;
+            }
+            count++;
+        }
+        return count >= minLength;
+    }
+
+    private String normalizeName(String name) {
+        return Arrays.stream(name.trim().toUpperCase().split("\\s+"))
+                .filter(part -> !part.isBlank())
+                .collect(Collectors.joining(" "));
     }
 
     private AgeEvaluation evaluateAge(Application app, ProductConfig config) {
@@ -364,9 +618,6 @@ public class ApplicationService {
         int age = Period.between(dob, LocalDate.now(Clock.systemUTC())).getYears();
         if (age < config.getMinAge()) {
             return new AgeEvaluation(true, false, List.of("VER_AGE_BELOW_MINIMUM"));
-        }
-        if (age == config.getMinAge()) {
-            return new AgeEvaluation(false, true, List.of("VER_AGE_EXACT_MINIMUM"));
         }
         return new AgeEvaluation(false, false, List.of());
     }
@@ -439,6 +690,10 @@ public class ApplicationService {
         return decision == Decision.REFERRED ? "VER_MANUAL_REVIEW_REQUIRED" : "VER_RULE_FAILED";
     }
 
+    private boolean isHighRiskCountry(String code) {
+        return hasText(code) && HIGH_RISK_COUNTRIES.contains(code.toUpperCase());
+    }
+
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
@@ -463,5 +718,17 @@ public class ApplicationService {
     }
 
     private record LimitEvaluation(boolean hardFailure, boolean reviewFlag, List<String> reasons) {
+    }
+
+    private record NameEvaluation(boolean hardFailure, boolean reviewFlag, List<String> reasons) {
+    }
+
+    private record HighRiskEvaluation(boolean reviewFlag, List<String> reasons) {
+    }
+
+    private record AffordabilityEvaluation(boolean hardFailure, boolean reviewFlag, List<String> reasons) {
+    }
+
+    private record DeliveryEvaluation(boolean hardFailure, boolean reviewFlag, List<String> reasons) {
     }
 }
