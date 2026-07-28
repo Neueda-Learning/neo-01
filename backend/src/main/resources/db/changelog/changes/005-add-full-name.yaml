@@ -1,0 +1,16 @@
+databaseChangeLog:
+
+  - changeSet:
+      id: 005-add-full-name
+      author: neo-01
+      comment: >
+        Add applicant full_name column to verification_record for search functionality.
+      changes:
+        - addColumn:
+            tableName: verification_record
+            columns:
+              - column:
+                  name: full_name
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
