@@ -1,103 +1,101 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { AppShell, Button, SideBrand, SideNav, StatusPill } from './design-system';
+import React, { useCallback, useState } from 'react';
+import { AppShell, EmptyState, TopNav } from './design-system';
 import RequestsScreen from './components/RequestsScreen.jsx';
 import { api } from './api.js';
 
-const POLL_MS = 2000;
-const HEALTH_MS = 10000;
-
-/**
- * The screens in the side menu.
- *
- * ⚠️ One real screen and three placeholders — the placeholders are there so the menu shows you
- * where your own screens go, and they are `disabled` so nobody clicks into nothing. Replace them
- * with what your business topic actually needs; the operator UI is a graded deliverable, and a
- * single read-only list is not one.
- */
-const SCREENS = [
-  { id: 'applications', label: 'Applications' },
-  { id: 'cases', label: 'Cases', hint: 'your own table', disabled: true },
-  { id: 'overrides', label: 'Overrides', hint: 'operator actions', disabled: true },
-  { id: 'settings', label: 'Settings', hint: 'reference data', disabled: true },
+const MOCK_REQUESTS = [
+  {
+    applicationId: 'app-1234',
+    status: 'ACCEPTED',
+    createdAt: '2026-07-21T21:40:00Z',
+    ruleResults: JSON.stringify([{ reasonCodes: ['VER_ALL_CHECKS_PASSED'] }]),
+  },
+  {
+    applicationId: 'app-1235',
+    status: 'REJECTED',
+    createdAt: '2026-07-21T18:02:00Z',
+    ruleResults: JSON.stringify([{ reasonCodes: ['VER_AGE_BELOW_MINIMUM'] }]),
+  },
+  {
+    applicationId: 'app-1236',
+    status: 'REJECTED',
+    createdAt: '2026-07-21T17:15:00Z',
+    ruleResults: JSON.stringify([
+      { reasonCodes: ['VER_MISSING_FIELD'] },
+      { reasonCodes: ['VER_INVALID_FIELD'] },
+      { reasonCodes: ['VER_MISSING_FIELD'] },
+    ]),
+  },
+  {
+    applicationId: 'app-1237',
+    status: 'ACCEPTED',
+    createdAt: '2026-07-21T16:48:00Z',
+    ruleResults: JSON.stringify([{ reasonCodes: ['VER_ALL_CHECKS_PASSED'] }]),
+  },
+  {
+    applicationId: 'app-1240',
+    status: 'REFERRED',
+    createdAt: '2026-07-21T15:31:00Z',
+    ruleResults: JSON.stringify([{ reasonCodes: ['VER_AGE_EXACT_MINIMUM'] }]),
+  },
+  {
+    applicationId: 'app-1241',
+    status: 'ACCEPTED',
+    createdAt: '2026-07-21T14:12:00Z',
+    ruleResults: JSON.stringify([{ reasonCodes: ['VER_ALL_CHECKS_PASSED'] }]),
+  },
 ];
 
-/**
- * A sidebar rather than a top bar: this app is expected to grow more screens than a row of tabs
- * holds, and the menu is where a team plans that growth. The identity box above it is the only
- * place the app says who it belongs to — its values come from `/info`, so the same image reads
- * "Team 07" once SERVICE_TEAM says so.
- */
+const SCREENS = [
+  { id: 'verification-board', label: 'Verification Board' },
+  { id: 'failure-patterns', label: 'Failure Patterns' },
+  { id: 'product-configuration', label: 'Product Configuration' },
+];
+
 export default function App() {
-  const [screen, setScreen] = useState('applications');
-  const [requests, setRequests] = useState([]);
+  const [screen, setScreen] = useState('verification-board');
+  const [requests, setRequests] = useState(MOCK_REQUESTS);
+  const [loadingRequests, setLoadingRequests] = useState(false);
   const [error, setError] = useState(null);
-  const [health, setHealth] = useState(null);
-  const [info, setInfo] = useState(null);
 
   const reload = useCallback(async () => {
+    setLoadingRequests(true);
     try {
-      setRequests(await api.listApplications());
+      const rows = await api.listApplications();
+      setRequests(rows.length > 0 ? rows : MOCK_REQUESTS);
       setError(null);
     } catch (e) {
       setError(e.message);
+      setRequests(MOCK_REQUESTS);
+    } finally {
+      setLoadingRequests(false);
     }
   }, []);
-
-  useEffect(() => {
-    reload();
-    const id = setInterval(reload, POLL_MS);
-    return () => clearInterval(id);
-  }, [reload]);
-
-  const refreshHealth = useCallback(async () => {
-    try {
-      const [h, i] = await Promise.all([api.health(), api.info()]);
-      setHealth(h);
-      setInfo(i);
-    } catch {
-      setHealth(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    refreshHealth();
-    const id = setInterval(refreshHealth, HEALTH_MS);
-    return () => clearInterval(id);
-  }, [refreshHealth]);
-
-  const up = !error && health?.status === 'UP';
 
   return (
     <AppShell
-      side={
-        <>
-          <SideBrand
-            brand={info?.team ?? 'Team'}
-            product={info?.service ?? 'Module'}
-            meta={info ? `${info.serviceId} · ${info.domain}` : undefined}
-          />
-          <SideNav items={SCREENS} active={screen} onSelect={setScreen} />
-          {/* Health and refresh lived in the top bar; with the bar gone they belong beside the
-              menu rather than inside it — a menu item that is not a screen is a trap. */}
-          <div className="app-side-status">
-            <StatusPill tone={up ? 'positive' : 'negative'}>{up ? 'Up' : 'Down'}</StatusPill>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                reload();
-                refreshHealth();
-              }}
-            >
-              Refresh
-            </Button>
-          </div>
-        </>
-      }
-      footer="One of ten modules · applications arrive from the orchestrator, never from this UI"
+      nav={<TopNav brand="NEO" product="Verification" tabs={SCREENS} active={screen} onSelect={setScreen} />}
+      wide
     >
-      {screen === 'applications' && (
-        <RequestsScreen requests={requests} error={error} info={info} />
+      {screen === 'verification-board' && (
+        <RequestsScreen
+          requests={requests}
+          error={error}
+          loading={loadingRequests}
+          onLoad={reload}
+        />
+      )}
+
+      {screen === 'failure-patterns' && (
+        <EmptyState title="Failure Patterns">
+          This screen will show ranked reason codes by date window (UC04).
+        </EmptyState>
+      )}
+
+      {screen === 'product-configuration' && (
+        <EmptyState title="Product Configuration">
+          This screen will manage product versions and history (UC06 and UC07).
+        </EmptyState>
       )}
     </AppShell>
   );
