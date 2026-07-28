@@ -1,0 +1,52 @@
+databaseChangeLog:
+
+  - changeSet:
+      id: 004-seed-product-config-standard
+      author: neo-01
+      comment: Seed initial version for CREDIT_CARD_STANDARD
+      changes:
+        - insert:
+            tableName: product_config
+            columns:
+              - column: { name: product_code, value: 'CREDIT_CARD_STANDARD' }
+              - column: { name: version, valueNumeric: 1 }
+              - column: { name: min_age, valueNumeric: 18 }
+              - column: { name: limit_min, valueNumeric: 500 }
+              - column: { name: limit_max, valueNumeric: 5000 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: channels, value: 'WEB,MOBILE_APP' }
+              - column: { name: effective_from, value: '2026-07-01 00:00:00' }
+
+  - changeSet:
+      id: 004-seed-product-config-rewards
+      author: neo-01
+      comment: Seed initial version for CREDIT_CARD_REWARDS
+      changes:
+        - insert:
+            tableName: product_config
+            columns:
+              - column: { name: product_code, value: 'CREDIT_CARD_REWARDS' }
+              - column: { name: version, valueNumeric: 1 }
+              - column: { name: min_age, valueNumeric: 18 }
+              - column: { name: limit_min, valueNumeric: 1000 }
+              - column: { name: limit_max, valueNumeric: 10000 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: channels, value: 'WEB,MOBILE_APP,BRANCH' }
+              - column: { name: effective_from, value: '2026-07-01 00:00:00' }
+
+  - changeSet:
+      id: 004-seed-product-config-student
+      author: neo-01
+      comment: Seed initial version for CREDIT_CARD_STUDENT
+      changes:
+        - insert:
+            tableName: product_config
+            columns:
+              - column: { name: product_code, value: 'CREDIT_CARD_STUDENT' }
+              - column: { name: version, valueNumeric: 1 }
+              - column: { name: min_age, valueNumeric: 18 }
+              - column: { name: limit_min, valueNumeric: 500 }
+              - column: { name: limit_max, valueNumeric: 3000 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: channels, value: 'WEB,MOBILE_APP' }
+              - column: { name: effective_from, value: '2026-07-01 00:00:00' }
