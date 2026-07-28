@@ -35,19 +35,21 @@ public class CaseService {
 
     /**
      * Search for cases matching {@code q} against applicationId or applicant fullName.
+     * When {@code q} is absent or blank, returns all records newest-first (still capped).
      *
-     * @param q     applicationId fragment or applicant name; {@code null}/{@code ""} → empty result
+     * @param q     applicationId fragment or applicant name; {@code null}/{@code ""} → all records
      * @param limit maximum rows to return; capped at {@value #DEFAULT_LIMIT}
      * @return map with {@code "cases"} (list of {@link CaseSearchResult}) and {@code "more"} (boolean)
      */
     public Map<String, Object> search(String q, int limit) {
         int cap = Math.min(limit, DEFAULT_LIMIT);
+        Pageable pageable = PageRequest.of(0, cap + 1, Sort.by(Sort.Direction.DESC, "createdAt"));
 
         if (q == null || q.isBlank()) {
-            return response(List.of(), false);
+            List<VerificationRecord> all = cases.findAll(pageable).getContent();
+            return toResponse(all, cap);
         }
 
-        Pageable pageable = PageRequest.of(0, cap + 1, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<VerificationRecord> hits = cases.searchByIdOrName(q, pageable);
         return toResponse(hits, cap);
     }
