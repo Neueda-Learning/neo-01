@@ -1,11 +1,14 @@
 package com.neobank.module.integrations.orchestrator;
 
 import com.neobank.module.model.Decision;
+import java.util.NoSuchElementException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 /**
  * The outbound half of the contract: telling the orchestrator what this module decided.
@@ -54,6 +57,27 @@ public class OrchestratorClient {
         } catch (Exception e) {
             log.warn("Status update to the orchestrator failed for {}: {} — its timeout sweeper "
                     + "will notice", applicationId, e.toString());
+        }
+    }
+
+    /**
+     * Fetches the whole application by id from the orchestrator.
+     */
+    public Application getApplication(String applicationId) {
+        try {
+            return http.get()
+                    .uri(applicationsUrl + "/" + applicationId)
+                    .retrieve()
+                    .body(Application.class);
+        } catch (RestClientResponseException e) {
+            if (e.getStatusCode().value() == 404) {
+                throw new NoSuchElementException("Unknown applicationId: " + applicationId);
+            }
+            throw new OrchestratorUnavailableException(
+                    "Orchestrator returned an error. Please retry.", e);
+        } catch (ResourceAccessException e) {
+            throw new OrchestratorUnavailableException(
+                    "Orchestrator is unreachable. Please retry.", e);
         }
     }
 }
