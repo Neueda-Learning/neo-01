@@ -116,6 +116,7 @@ public class ApplicationService {
      */
     boolean acceptRequest(ApplicationRequest request) {
         String id = request.applicationId();
+        String fullName = extractFullName(request);
         Optional<VerificationRecord> existing = verificationRecords.findById(id);
         if (existing.isPresent()) {
             VerificationRecord record = existing.get();
@@ -137,7 +138,7 @@ public class ApplicationService {
             return false;
         }
         verificationRecords.save(new VerificationRecord(
-                id, Decision.IN_PROGRESS, "pending verification", null, null));
+                id, Decision.IN_PROGRESS, "pending verification", null, null, fullName));
         log.info("Accepted — {}", request.summary());
         return true;
     }
@@ -156,6 +157,7 @@ public class ApplicationService {
      */
     void processApplication(ApplicationRequest request) {
         String applicationId = request.applicationId();
+        String fullName = extractFullName(request);
         try {
             log.info("Deciding — {}", request.summary());
 
@@ -165,13 +167,28 @@ public class ApplicationService {
                     result.decision(),
                     result.reference(),
                     result.productConfigId(),
-                    result.ruleResultsJson()));
+                    result.ruleResultsJson(), fullName));
             orchestrator.applicationStatusUpdate(applicationId, result.decision(), result.reference());
         } catch (RuntimeException e) {
             log.error("processApplication failed for {} — referring", applicationId, e);
             orchestrator.applicationStatusUpdate(applicationId, Decision.REFERRED,
                     "module error: " + e);
         }
+    }
+
+    /**
+     * Extract fullName from the application request.
+     * Returns null if the applicant or fullName is not present.
+     */
+    private String extractFullName(ApplicationRequest request) {
+        if (request == null || request.application() == null) {
+            return null;
+        }
+        Application.Applicant applicant = request.application().applicant();
+        if (applicant == null || applicant.fullName() == null) {
+            return null;
+        }
+        return applicant.fullName();
     }
 
     /**
