@@ -11,23 +11,16 @@ Everything that distinguishes one module from another is an env var — `SERVICE
 image wearing a different name. What makes yours *yours* is the business rules you write
 in `service/ApplicationService.java`.
 
-**This is a skeleton.** It accepts an application from the orchestrator, answers `202`
-immediately, and then — off the request thread — does the three smallest things that prove the
-whole contract works:
-
-1. prints `Hello world from processApplication`,
-2. writes one row to a placeholder table called `demo_showcase`,
-3. reports `ACCEPTED` back with `PUT /api/v1/applications/{id}`.
-
-**All three are placeholders, and replacing them is the work.** Start with
-`backend/.../service/ApplicationService.java` — it is the only file you have to touch to change
-what this module does.
+This module performs **application verification** — the first step in the onboarding
+journey. It validates the application envelope, checks the applicant's age, credit limit,
+product eligibility, and channel availability against configured product rules, then
+reports the outcome (`PASSED` / `FAILED` / `REVIEW`) back to the orchestrator.
 
 ```
-controller/     the HTTP surface (contract + health + info + error shape)
+controller/     the HTTP surface (contract + health + info + cases + products)
 service/        ApplicationService  ← YOURS
-repository/     one Spring Data interface
-model/          DemoShowcase (⚠️ replace) · Decision enum
+repository/     Spring Data interfaces
+model/          VerificationRecord · ProductConfig · Decision enum
 dto/            what your UI reads
 integrations/
   orchestrator/ the wire, and the typed Application. Fixed — your own
@@ -35,17 +28,485 @@ integrations/
 config/         two beans
 ```
 
-That layout is deliberately the one from the Week-2 lab track
-(`controller → service → repository`), so nothing structural has to be learned before the work
-starts.
+## API Reference
 
-**Read `integrations/orchestrator/Application.java` first.** It is the customer's application form
-as Java — nine nested records, every field a module could need — and it is the only place the
-domain is written down. Your rules read it: `request.application().finances().annualIncome()`.
+### Contract Endpoint
 
-**Your table is not `demo_showcase`.** That one exists so the skeleton has something to write and
-something to show. Replacing it means a new Liquibase change set (`002-…`), your own entity, and
-deleting `DemoShowcase` — never adding columns to it. `DemoShowcase.java` spells out the steps.
+#### `POST /api/v1/applications`
+
+The contract entry point. The orchestrator sends an application; this module answers
+`202` immediately and processes the application asynchronously.
+
+**Request body** — `ApplicationRequest`:
+
+```json
+{
+  "applicationId": "SIM-01",
+  "correlationId": "sim-0001",
+  "command": "process-application",
+  "application": {
+    "applicant": { "fullName": "Maria Nowak", "dateOfBirth": "1995-03-15", ... },
+    "product": { "productCode": "CREDIT_CARD_REWARDS", "requestedCreditLimit": 3000 },
+    "channel": "MOBILE_APP",
+    ...
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `applicationId` | String | **yes** | the id everything keys on; `@NotBlank` — `400` if missing |
+| `correlationId` | String | no | ties this call to one customer journey across all ten modules |
+| `command` | String | no | what you are being asked to do (e.g. `process-application`) |
+| `application` | Application | no | the whole application form, every field, typed |
+
+**Response** — `202 Accepted`:
+
+```json
+{
+  "status": "in-progress",
+  "applicationId": "SIM-01",
+  "serviceId": "neo01",
+  "command": "process-application"
+}
+```
+
+**Validation rules:**
+- Missing `applicationId` → `400 Bad Request`
+- Missing or blank `command` → `400 Bad Request`
+- Malformed JSON → `400 Bad Request`
+- Everything else (malformed dates, unknown product codes, etc.) is accepted — judging
+  those is the module's job, and a `400` would rob it of the chance to report specific
+  field errors via reason codes.
+
+**Idempotency:** a duplicate `applicationId` for an already-decided case returns `202`
+again with no reprocessing; the stored outcome is replayed to the orchestrator via callback.
+
+---
+
+#### `GET /api/v1/applications`
+
+Lists all verification records this module has processed, newest first. Read by this
+module's own UI; the orchestrator never calls it.
+
+**Response** — `200 OK`:
+
+```json
+[
+  {
+    "applicationId": "SIM-01",
+    "fullName": "Maria Nowak",
+    "outcome": "PASSED",
+    "reference": "VER_ALL_CHECKS_PASSED",
+    "ruleResults": "[{\"rule\":\"wellFormedness\",\"pass\":true}, ...]",
+    "createdAt": "2026-07-28T17:41:33.962Z"
+  }
+]
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `applicationId` | String | the id of the application |
+| `fullName` | String | applicant's full name |
+| `outcome` | String | `IN_PROGRESS` · `PASSED` · `FAILED` · `REVIEW` |
+| `reference` | String | primary reason code (e.g. `VER_ALL_CHECKS_PASSED`) |
+| `ruleResults` | String | JSON array of rule evaluation results |
+| `createdAt` | Instant | when this module received the application |
+
+---
+
+### Callback (outbound)
+
+#### `PUT {ORCHESTRATOR_URL}/api/v1/applications/{applicationId}`
+
+This module PUTs the outcome back to the orchestrator once processing is complete.
+The `applicationId` is in the URL, not the body.
+
+**Request body** — `ApplicationStatusUpdate`:
+
+```json
+{
+  "serviceId": "neo01",
+  "status": "PASSED",
+  "comment": "VER_ALL_CHECKS_PASSED"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `serviceId` | String | `neo01` — deliberately not the repo name |
+| `status` | String | `PASSED` · `FAILED` · `REVIEW` (uppercase) |
+| `comment` | String | reason code(s) explaining the outcome |
+
+---
+
+### Case Management (UC-01 · UC-02 · UC-03 · UC-05)
+
+#### `GET /cases`
+
+Search for verification cases (UC-01). The board starts empty — no `q` means no rows.
+
+**Query parameters:**
+
+| Param | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `q` | String | no | — | applicationId fragment or applicant name |
+| `limit` | int | no | `10` | maximum rows (capped at 10) |
+
+**Response** — `200 OK`:
+
+```json
+{
+  "cases": [
+    {
+      "applicationId": "SIM-01",
+      "fullName": "Maria Nowak",
+      "submittedAt": "2026-07-28T17:41:33.962Z",
+      "outcome": "PASSED",
+      "reasonCount": 0
+    }
+  ],
+  "more": false
+}
+```
+
+---
+
+#### `GET /cases/{applicationId}`
+
+Review one case that was already decided and stored (UC-02).
+
+**Path parameters:**
+
+| Param | Description |
+|---|---|
+| `applicationId` | the id of the case to review |
+
+**Response** — `200 OK`:
+
+```json
+{
+  "outcome": "REVIEW",
+  "reference": "VER_AGE_EXACT_MINIMUM",
+  "productConfigVersion": 6,
+  "ruleResults": [
+    { "rule": "wellFormedness", "pass": true },
+    { "rule": "age", "pass": false, "reason": "VER_AGE_EXACT_MINIMUM" }
+  ]
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `outcome` | String | `IN_PROGRESS` · `PASSED` · `FAILED` · `REVIEW` |
+| `reference` | String | primary reason code |
+| `productConfigVersion` | Integer | which product config version was applied |
+| `ruleResults` | JsonNode | detailed rule evaluation results |
+
+**Errors:** `404 Not Found` if the applicationId does not exist.
+
+---
+
+#### `GET /cases/{applicationId}/applicant`
+
+Fetches the applicant block live from the orchestrator (UC-03). Applicant data is never
+persisted in this module's schema.
+
+**Path parameters:**
+
+| Param | Description |
+|---|---|
+| `applicationId` | the id of the case |
+
+**Response** — `200 OK`:
+
+```json
+{
+  "fullName": "Maria Nowak",
+  "dateOfBirth": "1995-03-15",
+  "product": {
+    "productCode": "CREDIT_CARD_REWARDS",
+    "requestedCreditLimit": 3000
+  },
+  "channel": "MOBILE_APP",
+  "countryOfResidence": "GB",
+  "consents": {
+    "termsAccepted": true
+  }
+}
+```
+
+---
+
+#### `POST /cases/{applicationId}/override`
+
+Manually change a verification outcome (UC-05). Updates the outcome, logs the override
+for audit, and re-notifies the orchestrator.
+
+**Path parameters:**
+
+| Param | Description |
+|---|---|
+| `applicationId` | the id of the case to override |
+
+**Request body** — `OverrideCaseRequest`:
+
+```json
+{
+  "newOutcome": "PASSED",
+  "reason": "Manual review approved by supervisor",
+  "operator": "operator@example.com"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `newOutcome` | String | **yes** | must be `PASSED`, `FAILED`, or `REVIEW` |
+| `reason` | String | **yes** | why the override was made |
+| `operator` | String | **yes** | who made the override |
+
+**Response** — `200 OK`: the updated case (same shape as `GET /cases/{applicationId}`).
+
+**Errors:** `400 Bad Request` if validation fails; `404 Not Found` if the case does not exist.
+
+---
+
+### Failure Patterns (UC-04)
+
+#### `GET /reason-codes`
+
+Returns reason-code counts for the given inclusive date window, ranked descending (UC-04).
+
+**Query parameters:**
+
+| Param | Type | Required | Format | Description |
+|---|---|---|---|---|
+| `from` | LocalDate | **yes** | `YYYY-MM-DD` | start date (inclusive) |
+| `to` | LocalDate | **yes** | `YYYY-MM-DD` | end date (inclusive) |
+
+**Response** — `200 OK`:
+
+```json
+[
+  { "code": "VER_AGE_BELOW_MINIMUM", "count": 3, "kind": "failure" },
+  { "code": "VER_LIMIT_EXACT_MAXIMUM", "count": 2, "kind": "review" },
+  { "code": "VER_TERMS_NOT_ACCEPTED", "count": 1, "kind": "failure" }
+]
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `code` | String | the `VER_` reason code |
+| `count` | long | occurrences within the requested window |
+| `kind` | String | `"failure"` or `"review"` — derived from the code |
+
+---
+
+### Product Configuration
+
+#### `POST /products`
+
+Create a new version of product rules. Versions are insert-only (never update or delete);
+the version number auto-increments per `productCode`.
+
+**Request body** — `CreateProductVersionRequest`:
+
+```json
+{
+  "productCode": "CREDIT_CARD_REWARDS",
+  "minAge": 18,
+  "limitMin": 500,
+  "limitMax": 10000,
+  "active": true,
+  "channels": ["WEB", "MOBILE_APP", "BRANCH"]
+}
+```
+
+| Field | Type | Required | Validation | Description |
+|---|---|---|---|---|
+| `productCode` | String | **yes** | `@NotBlank` | product identifier |
+| `minAge` | Integer | **yes** | `@NotNull`, `@Min(18)` | minimum applicant age |
+| `limitMin` | Integer | **yes** | `@NotNull`, `@Min(0)` | minimum credit limit |
+| `limitMax` | Integer | **yes** | `@NotNull`, `@Min(0)` | maximum credit limit |
+| `active` | Boolean | **yes** | `@NotNull` | whether new applications are accepted |
+| `channels` | List\<String\> | **yes** | `@NotEmpty` | eligible channels (`WEB`, `MOBILE_APP`, `BRANCH`, `PHONE`) |
+
+**Additional service-level validation:**
+- `limitMin` must be strictly less than `limitMax`
+- `channels` must contain only valid values: `WEB`, `MOBILE_APP`, `BRANCH`, `PHONE`
+
+**Response** — `201 Created`:
+
+```json
+{ "version": 7 }
+```
+
+**Errors:** `400 Bad Request` if validation fails.
+
+---
+
+#### `GET /products/{code}/versions`
+
+List all versions of a product's configuration, ordered by version descending.
+
+**Path parameters:**
+
+| Param | Description |
+|---|---|
+| `code` | the product code (e.g. `CREDIT_CARD_REWARDS`) |
+
+**Response** — `200 OK`:
+
+```json
+[
+  {
+    "productCode": "CREDIT_CARD_REWARDS",
+    "version": 6,
+    "minAge": 18,
+    "limitMin": 500,
+    "limitMax": 10000,
+    "active": true,
+    "channels": ["WEB", "MOBILE_APP", "BRANCH"],
+    "effectiveFrom": "2026-07-29T00:00:00Z",
+    "current": true
+  },
+  {
+    "productCode": "CREDIT_CARD_REWARDS",
+    "version": 5,
+    "minAge": 18,
+    "limitMin": 1000,
+    "limitMax": 10000,
+    "active": true,
+    "channels": ["WEB", "MOBILE_APP", "BRANCH"],
+    "effectiveFrom": "2026-07-01T00:00:00Z",
+    "current": false
+  }
+]
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `productCode` | String | product identifier |
+| `version` | Integer | version number (auto-incremented per productCode) |
+| `minAge` | Integer | minimum applicant age |
+| `limitMin` | Integer | minimum credit limit |
+| `limitMax` | Integer | maximum credit limit |
+| `active` | Boolean | whether new applications are accepted |
+| `channels` | List\<String\> | eligible channels |
+| `effectiveFrom` | Instant | when this version takes effect |
+| `current` | Boolean | whether this is the highest version (applied to new applications) |
+
+**Errors:** `404 Not Found` if no versions exist for the given product code.
+
+---
+
+#### `GET /products`
+
+List all product codes that have at least one configured version.
+
+**Response** — `200 OK`:
+
+```json
+["CREDIT_CARD_REWARDS", "CREDIT_CARD_STANDARD", "CREDIT_CARD_STUDENT"]
+```
+
+---
+
+### Health & Identity
+
+#### `GET /health`
+
+DB-backed health check. Probes the database connection — a green light means "I can
+actually serve requests". Used by the compose healthcheck, the orchestrator's service
+board, and the ALB target group health check.
+
+**Response** — `200 OK` (database up) or `503 Service Unavailable` (database down):
+
+```json
+{
+  "status": "UP",
+  "serviceId": "neo01",
+  "service": "Application Verification",
+  "timestamp": "2026-07-28T17:41:33.962Z",
+  "database": { "status": "UP" }
+}
+```
+
+---
+
+#### `GET /info`
+
+Identity and configuration register. Reports who this module is and what it is faking.
+The quickest check that a deploy actually landed.
+
+**Response** — `200 OK`:
+
+```json
+{
+  "serviceId": "neo01",
+  "service": "Application Verification",
+  "team": "Team 01",
+  "domain": "verification",
+  "version": "0.1.0-SNAPSHOT",
+  "orchestratorUrl": "http://sidecar:8080",
+  "mockedDependencies": []
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `serviceId` | String | `neo01` — deliberately not the repo name |
+| `service` | String | display name |
+| `team` | String | which team owns this module |
+| `domain` | String | the BIAN domain this module owns |
+| `version` | String | application version |
+| `orchestratorUrl` | String | where callbacks are sent |
+| `mockedDependencies` | List\<String\> | external systems this module fakes; empty = claims nothing is mocked |
+
+---
+
+### Error Handling
+
+All errors return a consistent JSON shape:
+
+```json
+{
+  "timestamp": "2026-07-28T17:41:33.962Z",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "applicationId must not be blank"
+}
+```
+
+| HTTP Status | When |
+|---|---|
+| `400 Bad Request` | missing `applicationId`; blank `command`; malformed JSON; validation failure on `POST /products` or `POST /cases/{id}/override` |
+| `404 Not Found` | case or product version not found |
+| `503 Service Unavailable` | orchestrator unreachable when sending callback |
+| `500 Internal Server Error` | unexpected failure (stack trace hidden) |
+
+---
+
+## Reason Codes
+
+This module uses `VER_` prefixed reason codes. Codes from other modules use different
+prefixes (`POL_`, `KYC_`, `SCR_`, `CRE_`, `CRD_`) and are not produced by this module.
+
+| Code | Kind | Description |
+|---|---|---|
+| `VER_ALL_CHECKS_PASSED` | — | all verification rules passed |
+| `VER_AGE_EXACT_MINIMUM` | review | applicant age exactly equals minimum age |
+| `VER_AGE_BELOW_MINIMUM` | failure | applicant age below minimum age |
+| `VER_LIMIT_EXACT_MAXIMUM` | review | requested limit exactly equals maximum |
+| `VER_LIMIT_OUTSIDE_PRODUCT_RANGE` | failure | requested limit outside min/max range |
+| `VER_TERMS_NOT_ACCEPTED` | failure | terms and conditions not accepted |
+| `VER_MISSING_FIELD` | failure | required field missing in the envelope |
+| `VER_INVALID_FIELD` | failure | field format invalid (e.g. date, ISO code) |
+| `VER_PRODUCT_INACTIVE` | failure | product is not active for new applications |
+| `VER_CHANNEL_NOT_ELIGIBLE` | failure | channel not in product's eligible channels |
+| `VER_INVALID_PRODUCT` | failure | unknown product code |
+
+---
 
 ## What pushing does
 
@@ -137,7 +598,7 @@ Backend only, for fast iteration:
 ```bash
 docker compose up -d mysql sidecar
 cd backend
-./mvnw test                                              # 19 tests, H2, no Docker
+./mvnw test                                              # unit + web-slice + full-context H2
 DB_URL=jdbc:mysql://localhost:3307/neo_01 ./mvnw spring-boot:run
 ```
 
@@ -185,7 +646,7 @@ In short:
 | Endpoint | Purpose |
 |---|---|
 | `POST /api/v1/applications` | the orchestrator sends an application → `202 {status:"in-progress", applicationId, serviceId, command}` |
-| `GET /api/v1/applications` | the `demo_showcase` rows — read by *your* UI, never by the orchestrator |
+| `GET /api/v1/applications` | the verification records — read by *your* UI, never by the orchestrator |
 | `GET /health` · `GET /info` | DB-backed health · identity, BIAN domain, and what is mocked |
 
 Add whatever else your operator screen needs — a search, a detail lookup, a manual override. Those
@@ -195,8 +656,8 @@ Once the work is done — off the request thread, so within milliseconds unless 
 slow — it PUTs `${ORCHESTRATOR_URL}/api/v1/applications/{applicationId}`:
 
 ```json
-{ "serviceId": "neo01", "status": "ACCEPTED",
-  "comment": "hello world from processApplication" }
+{ "serviceId": "neo01", "status": "PASSED",
+  "comment": "VER_ALL_CHECKS_PASSED" }
 ```
 
 **Three fields: the application id is in the URL, not the body.** This is an update to an
@@ -237,7 +698,7 @@ Only this value changes between them. The module's code does not.
 
 ```bash
 cd backend
-./mvnw test                       # 19: unit + web-slice + full-context H2
+./mvnw test                       # unit + web-slice + full-context H2
 ./mvnw verify -DskipITs=false     # + RequestRepositoryIT against real MySQL 8 (needs Docker)
 ```
 
