@@ -172,7 +172,7 @@ public class ApplicationService {
             orchestrator.applicationStatusUpdate(applicationId, result.decision(), result.reference());
         } catch (RuntimeException e) {
             log.error("processApplication failed for {} — referring", applicationId, e);
-            orchestrator.applicationStatusUpdate(applicationId, Decision.REFERRED,
+            orchestrator.applicationStatusUpdate(applicationId, Decision.REVIEW,
                     "module error: " + e);
         }
     }
@@ -345,11 +345,11 @@ public class ApplicationService {
 
         Decision decision;
         if (reviewFlag) {
-            decision = Decision.REFERRED;
+            decision = Decision.REVIEW;
         } else if (hardFailure) {
-            decision = Decision.REJECTED;
+            decision = Decision.FAILED;
         } else {
-            decision = Decision.ACCEPTED;
+            decision = Decision.PASSED;
         }
 
         String reference = buildReference(decision, ruleResults);
@@ -693,7 +693,7 @@ public class ApplicationService {
     }
 
     private String buildReference(Decision decision, ArrayNode ruleResults) {
-        if (decision == Decision.ACCEPTED) {
+        if (decision == Decision.PASSED) {
             return "VER_ALL_CHECKS_PASSED";
         }
         for (JsonNode rule : ruleResults) {
@@ -705,7 +705,7 @@ public class ApplicationService {
                 }
             }
         }
-        return decision == Decision.REFERRED ? "VER_MANUAL_REVIEW_REQUIRED" : "VER_RULE_FAILED";
+        return decision == Decision.REVIEW ? "VER_MANUAL_REVIEW_REQUIRED" : "VER_RULE_FAILED";
     }
 
     private boolean isHighRiskCountry(String code) {

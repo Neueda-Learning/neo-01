@@ -1,10 +1,14 @@
 package com.neobank.module.controller;
 
 import com.neobank.module.dto.ApplicantView;
+import com.neobank.module.dto.OverrideCaseRequest;
 import com.neobank.module.service.CaseService;
+import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -50,5 +54,23 @@ public class CasesController {
     @GetMapping("/{id}/applicant")
     public ApplicantView applicant(@PathVariable("id") String applicationId) {
         return caseService.findApplicant(applicationId);
+    }
+
+    /**
+     * UC-05: Override Case — manually change a verification outcome.
+     *
+     * <p>Updates the outcome and logs the override for audit purposes. Validates that
+     * {@code reason} and {@code operator} are provided, and that {@code newOutcome}
+     * is one of PASSED, FAILED, or REVIEW. Notifies the orchestrator of the change.</p>
+     *
+     * @param applicationId the id of the case to override
+     * @param request       {newOutcome, reason, operator} — all mandatory
+     * @return the updated case
+     */
+    @PostMapping("/{id}/override")
+    public Map<String, Object> overrideCase(
+            @PathVariable("id") String applicationId,
+            @Valid @RequestBody OverrideCaseRequest request) {
+        return caseService.override(applicationId, request);
     }
 }

@@ -78,15 +78,15 @@ class ApplicationServiceTest {
 
         service.processApplicationAsync(request("SIM-01"));
 
-        // Phase 1 (accept) → IN_PROGRESS; Phase 2 (decide) → ACCEPTED
+        // Phase 1 (accept) → IN_PROGRESS; Phase 2 (decide) → PASSED
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
         assertThat(saved.getAllValues().get(0).getOutcome()).isEqualTo("IN_PROGRESS");
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("ACCEPTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("PASSED");
         assertThat(saved.getAllValues().get(0).getApplicationId()).isEqualTo("SIM-01");
         assertThat(saved.getAllValues().get(0).getFullName()).isEqualTo("Maria Nowak");
 
-        verify(orchestrator).applicationStatusUpdate("SIM-01", Decision.ACCEPTED,
+        verify(orchestrator).applicationStatusUpdate("SIM-01", Decision.PASSED,
                 "VER_ALL_CHECKS_PASSED");
     }
 
@@ -106,12 +106,12 @@ class ApplicationServiceTest {
     @Test
     void replaysCallbackForAlreadyDecidedApplication() {
         when(verificationRecords.findById("SIM-DEC")).thenReturn(Optional.of(
-                new VerificationRecord("SIM-DEC", Decision.ACCEPTED, "previous decision", null, null, "Maria Nowak")));
+                new VerificationRecord("SIM-DEC", Decision.PASSED, "previous decision", null, null, "Maria Nowak")));
 
         service.processApplicationAsync(request("SIM-DEC"));
 
         verify(verificationRecords, never()).save(any());
-        verify(orchestrator).applicationStatusUpdate("SIM-DEC", Decision.ACCEPTED, "previous decision");
+        verify(orchestrator).applicationStatusUpdate("SIM-DEC", Decision.PASSED, "previous decision");
     }
 
     /**
@@ -132,7 +132,7 @@ class ApplicationServiceTest {
         service.processApplicationAsync(request("SIM-03"));
 
         ArgumentCaptor<String> comment = ArgumentCaptor.forClass(String.class);
-        verify(orchestrator).applicationStatusUpdate(eq("SIM-03"), eq(Decision.REFERRED),
+        verify(orchestrator).applicationStatusUpdate(eq("SIM-03"), eq(Decision.REVIEW),
                 comment.capture());
         assertThat(comment.getValue()).contains("database on fire");
         verifyNoMoreInteractions(orchestrator);
@@ -142,14 +142,14 @@ class ApplicationServiceTest {
     void theBoardShowsWhatWasStored() {
         when(verificationRecords.findAllByOrderByCreatedAtDesc())
                 .thenReturn(java.util.List.of(new VerificationRecord(
-                        "SIM-01", Decision.ACCEPTED, "hello world from processApplication",
+                        "SIM-01", Decision.PASSED, "hello world from processApplication",
                         null, null, "Maria Nowak")));
 
         assertThat(service.findAll())
                 .singleElement()
                 .satisfies(view -> {
                     assertThat(view.applicationId()).isEqualTo("SIM-01");
-                    assertThat(view.outcome()).isEqualTo("ACCEPTED");
+                    assertThat(view.outcome()).isEqualTo("PASSED");
                     assertThat(view.fullName()).isEqualTo("Maria Nowak");
                 });
     }
@@ -158,7 +158,7 @@ class ApplicationServiceTest {
     void uc02ReturnsStoredCaseDetailsAndResolvedProductConfigVersion() {
         VerificationRecord row = new VerificationRecord(
                 "SIM-CASE-1",
-                Decision.ACCEPTED,
+                Decision.PASSED,
                 "decision complete",
                 42L,
                 "[{\"ruleName\":\"age\",\"passed\":true,\"reasonCodes\":[\"VER_ALL_CHECKS_PASSED\"]}]", null);
@@ -168,7 +168,7 @@ class ApplicationServiceTest {
 
         var detail = service.findCase("SIM-CASE-1");
 
-        assertThat(detail.outcome()).isEqualTo("ACCEPTED");
+        assertThat(detail.outcome()).isEqualTo("PASSED");
         assertThat(detail.reference()).isEqualTo("decision complete");
         assertThat(detail.productConfigVersion()).isEqualTo(3);
         assertThat(detail.ruleResults().isArray()).isTrue();
@@ -203,7 +203,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REJECTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("FAILED");
         assertThat(saved.getAllValues().get(1).getRuleResults()).contains("VER_AGE_BELOW_MINIMUM");
     }
 
@@ -231,7 +231,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("ACCEPTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("PASSED");
     }
 
     @Test
@@ -259,7 +259,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("ACCEPTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("PASSED");
     }
 
     @Test
@@ -282,7 +282,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REJECTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("FAILED");
         assertThat(saved.getAllValues().get(1).getRuleResults()).contains("VER_LIMIT_ABOVE_MAXIMUM");
     }
 
@@ -311,7 +311,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REJECTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("FAILED");
         assertThat(saved.getAllValues().get(1).getRuleResults())
                 .contains("VER_MISSING_FIELD:applicant.email")
                 .contains("VER_MISSING_FIELD:applicant.mobile")
@@ -344,7 +344,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REJECTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("FAILED");
         assertThat(saved.getAllValues().get(1).getRuleResults()).contains("VER_TAX_RESIDENCY_NOT_SUPPORTED");
     }
 
@@ -373,7 +373,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REJECTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("FAILED");
         assertThat(saved.getAllValues().get(1).getRuleResults()).contains("VER_ID_DOCUMENT_EXPIRED");
     }
 
@@ -402,7 +402,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REJECTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("FAILED");
         assertThat(saved.getAllValues().get(1).getRuleResults())
                 .contains("VER_INVALID_FIELD:identityDocument.documentId");
     }
@@ -432,7 +432,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REJECTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("FAILED");
         assertThat(saved.getAllValues().get(1).getRuleResults()).contains("VER_NAME_EXACT_MATCH");
     }
 
@@ -461,7 +461,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REFERRED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REVIEW");
         assertThat(saved.getAllValues().get(1).getRuleResults()).contains("VER_NAME_PARTIAL_MATCH");
     }
 
@@ -490,7 +490,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REFERRED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REVIEW");
         assertThat(saved.getAllValues().get(1).getRuleResults()).contains("VER_HIGH_RISK_COUNTRY");
     }
 
@@ -519,7 +519,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("ACCEPTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("PASSED");
     }
 
     @Test
@@ -547,7 +547,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REJECTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("FAILED");
         assertThat(saved.getAllValues().get(1).getRuleResults()).contains("VER_AFFORDABILITY_DTI_TOO_HIGH");
     }
 
@@ -576,7 +576,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REJECTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("FAILED");
         assertThat(saved.getAllValues().get(1).getRuleResults()).contains("VER_MISSING_FIELD:delivery.address");
     }
 
@@ -606,7 +606,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REFERRED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REVIEW");
         assertThat(saved.getAllValues().get(1).getRuleResults())
                 .contains("VER_DELIVERY_ALTERNATE_ADDRESS_REVIEW");
     }
@@ -636,7 +636,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("REJECTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("FAILED");
         assertThat(saved.getAllValues().get(1).getRuleResults()).contains("VER_INCOME_BELOW_MINIMUM");
     }
 
@@ -665,6 +665,6 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("ACCEPTED");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("PASSED");
     }
 }

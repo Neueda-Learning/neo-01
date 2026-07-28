@@ -3,8 +3,8 @@ package com.neobank.module.model;
 /**
  * The three outcomes this module may reach about an application.
  *
- * <p>Only {@link #ACCEPTED} advances the journey; {@link #REJECTED} ends it and
- * {@link #REFERRED} parks it for a human. The names are the exact strings the orchestrator
+ * <p>Only {@link #PASSED} advances the journey; {@link #FAILED} ends it and
+ * {@link #REVIEW} parks it for a human. The names are the exact strings the orchestrator
  * expects on the callback, which is why this is an enum and not a {@code String}: a typo
  * cannot reach the wire.</p>
  */
@@ -17,11 +17,11 @@ public enum Decision {
     IN_PROGRESS,
 
     /** Your step passed. The only outcome that moves the application to the next module. */
-    ACCEPTED,
+    PASSED,
 
     /** A rule failed and no human can rescue it. Ends the journey. */
-    REJECTED,
+    FAILED,
 
     /** You cannot decide automatically. Parks the application for a human. */
-    REFERRED
+    REVIEW
 }

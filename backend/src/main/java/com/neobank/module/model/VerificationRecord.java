@@ -81,6 +81,7 @@ public class VerificationRecord {
 
     public String getApplicationId() { return applicationId; }
     public String getOutcome()       { return outcome; }
+    public void setOutcome(String outcome) { this.outcome = outcome; }
     public String getReference()     { return reference; }
     public Long getProductConfigId() { return productConfigId; }
     public String getRuleResults()   { return ruleResults; }

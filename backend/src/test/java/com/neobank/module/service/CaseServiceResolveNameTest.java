@@ -13,6 +13,7 @@ import com.neobank.module.integrations.orchestrator.OrchestratorClient;
 import com.neobank.module.integrations.orchestrator.OrchestratorUnavailableException;
 import com.neobank.module.model.Decision;
 import com.neobank.module.model.VerificationRecord;
+import com.neobank.module.repository.OverrideLogRepository;
 import com.neobank.module.repository.VerificationRecordRepository;
 import java.util.List;
 import java.util.Map;
@@ -31,20 +32,22 @@ import org.springframework.data.domain.Pageable;
 class CaseServiceResolveNameTest {
 
     private VerificationRecordRepository repo;
+    private OverrideLogRepository overrideLogs;
     private OrchestratorClient orchestrator;
     private CaseService service;
 
     @BeforeEach
     void setUp() {
         repo = mock(VerificationRecordRepository.class);
+        overrideLogs = mock(OverrideLogRepository.class);
         orchestrator = mock(OrchestratorClient.class);
-        service = new CaseService(repo, orchestrator);
+        service = new CaseService(repo, overrideLogs, orchestrator);
     }
 
     @Test
     void emptyQueryReturnsAllRecords() {
         VerificationRecord rec = new VerificationRecord(
-                "SIM-01", Decision.ACCEPTED, "ok", null, null, "Maria Chen");
+                "SIM-01", Decision.PASSED, "ok", null, null, "Maria Chen");
         when(repo.findAll(any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(rec)));
 
@@ -57,7 +60,7 @@ class CaseServiceResolveNameTest {
     @Test
     void nameQuerySearchesLocalDb() {
         VerificationRecord rec = new VerificationRecord(
-                "SIM-01", Decision.ACCEPTED, "ok", null, null, "Maria Chen");
+                "SIM-01", Decision.PASSED, "ok", null, null, "Maria Chen");
         when(repo.searchByIdOrName(eq("Maria"), any(Pageable.class)))
                 .thenReturn(List.of(rec));
 
@@ -81,7 +84,7 @@ class CaseServiceResolveNameTest {
     void moreFlagSetWhenResultsExceedLimit() {
         List<VerificationRecord> eleven = java.util.stream.IntStream.rangeClosed(1, 11)
                 .mapToObj(i -> new VerificationRecord(
-                        "SIM-" + i, Decision.ACCEPTED, "ok", null, null, "Maria Chen"))
+                        "SIM-" + i, Decision.PASSED, "ok", null, null, "Maria Chen"))
                 .toList();
         when(repo.searchByIdOrName(eq("Maria"), any(Pageable.class))).thenReturn(eleven);
 
