@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { AppShell, EmptyState, TopNav } from './design-system';
+import ProductConfigurationScreen from './components/ProductConfigurationScreen.jsx';
 import RequestsScreen from './components/RequestsScreen.jsx';
 import { api } from './api.js';
 
@@ -93,9 +94,7 @@ export default function App() {
       )}
 
       {screen === 'product-configuration' && (
-        <EmptyState title="Product Configuration">
-          This screen will manage product versions and history (UC06 and UC07).
-        </EmptyState>
+        <ProductConfigurationScreen />
       )}
     </AppShell>
   );

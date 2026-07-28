@@ -15,6 +15,7 @@ import {
   TextInput,
   Toolbar,
 } from '../design-system';
+import { api } from '../api.js';
 import { statusTone, time } from '../status.js';
 
 const FILTERS = [
@@ -45,22 +46,26 @@ const CASE_DETAIL_BY_APP_ID = {
       {
         title: 'Well-formedness sweep',
         outcome: 'PASSED',
-        description: 'All required fields present and well-formed | limit 3,000 within 500-10,000 | terms accepted',
+        reasons: [
+          'All required fields present and well-formed',
+          'Limit 3,000 within 500-10,000',
+          'Terms accepted',
+        ],
       },
       {
         title: 'R1 | Age vs product minimum',
         outcome: 'PASSED',
-        description: 'Applicant is 30, minimum required is 18',
+        reasons: ['Applicant is 30, minimum required is 18'],
       },
       {
         title: 'R2 | Product still active',
         outcome: 'PASSED',
-        description: 'CREDIT_CARD_REWARDS is active in ProductConfig v3',
+        reasons: ['CREDIT_CARD_REWARDS is active in ProductConfig v3'],
       },
       {
         title: 'R3 | Channel eligibility',
         outcome: 'PASSED',
-        description: 'MOBILE_APP is a permitted channel for this product',
+        reasons: ['MOBILE_APP is a permitted channel for this product'],
       },
     ],
   },
@@ -76,22 +81,26 @@ const CASE_DETAIL_BY_APP_ID = {
       {
         title: 'Well-formedness sweep',
         outcome: 'PASSED',
-        description: 'All required fields present and well-formed | limit 800 within 250-1,000 | terms accepted',
+        reasons: [
+          'All required fields present and well-formed',
+          'Limit 800 within 250-1,000',
+          'Terms accepted',
+        ],
       },
       {
         title: 'R1 | Age vs product minimum',
         outcome: 'FAILED',
-        description: 'VER_AGE_BELOW_MINIMUM - applicant is 17, CREDIT_CARD_STUDENT requires 18',
+        reasons: ['VER_AGE_BELOW_MINIMUM - applicant is 17, CREDIT_CARD_STUDENT requires 18'],
       },
       {
         title: 'R2 | Product still active',
         outcome: 'PASSED',
-        description: 'CREDIT_CARD_STUDENT is active in ProductConfig v3',
+        reasons: ['CREDIT_CARD_STUDENT is active in ProductConfig v3'],
       },
       {
         title: 'R3 | Channel eligibility',
         outcome: 'PASSED',
-        description: 'MOBILE_APP is a permitted channel for this product',
+        reasons: ['MOBILE_APP is a permitted channel for this product'],
       },
     ],
   },
@@ -107,22 +116,26 @@ const CASE_DETAIL_BY_APP_ID = {
       {
         title: 'Well-formedness sweep',
         outcome: 'FAILED',
-        description: 'VER_MISSING_FIELD on applicant.email - VER_INVALID_FIELD on applicant.mobile - VER_MISSING_FIELD on applicant.currentAddress',
+        reasons: [
+          'VER_MISSING_FIELD on applicant.email',
+          'VER_INVALID_FIELD on applicant.mobile',
+          'VER_MISSING_FIELD on applicant.currentAddress',
+        ],
       },
       {
         title: 'R1 | Age vs product minimum',
         outcome: 'PASSED',
-        description: 'Applicant is 24, minimum required is 18',
+        reasons: ['Applicant is 24, minimum required is 18'],
       },
       {
         title: 'R2 | Product still active',
         outcome: 'PASSED',
-        description: 'CREDIT_CARD_STANDARD is active in ProductConfig v3',
+        reasons: ['CREDIT_CARD_STANDARD is active in ProductConfig v3'],
       },
       {
         title: 'R3 | Channel eligibility',
         outcome: 'PASSED',
-        description: 'WEB is a permitted channel for this product',
+        reasons: ['WEB is a permitted channel for this product'],
       },
     ],
   },
@@ -162,24 +175,90 @@ function detailFor(row) {
       {
         title: 'Well-formedness sweep',
         outcome: 'PASSED',
-        description: 'All required fields present and well-formed',
+        reasons: ['All required fields present and well-formed'],
       },
       {
         title: 'R1 | Age vs product minimum',
         outcome,
-        description: 'Mocked detail generated for this row',
+        reasons: ['Mocked detail generated for this row'],
       },
       {
         title: 'R2 | Product still active',
         outcome: 'PASSED',
-        description: 'Product is active in ProductConfig v3',
+        reasons: ['Product is active in ProductConfig v3'],
       },
       {
         title: 'R3 | Channel eligibility',
         outcome: 'PASSED',
-        description: 'Channel is permitted for this product',
+        reasons: ['Channel is permitted for this product'],
       },
     ],
+  };
+}
+
+function allReasonCodes(ruleResults) {
+  if (!ruleResults) return [];
+  try {
+    const parsed = JSON.parse(ruleResults);
+    if (Array.isArray(parsed)) {
+      return parsed.flatMap((item) => (Array.isArray(item?.reasonCodes) ? item.reasonCodes : []));
+    }
+    if (Array.isArray(parsed?.ruleResults)) {
+      return parsed.ruleResults.flatMap((item) =>
+        Array.isArray(item?.reasonCodes) ? item.reasonCodes : []
+      );
+    }
+  } catch {
+    return [];
+  }
+  return [];
+}
+
+function makeFallbackRules(row) {
+  const reasons = allReasonCodes(row.ruleResults);
+  const firstOutcome = toDecisionLabel(row.status) === 'FAILED' ? 'FAILED' : 'PASSED';
+  return [
+    {
+      title: 'Well-formedness sweep',
+      outcome: firstOutcome,
+      reasons: reasons.length > 0 ? reasons : ['VER_ALL_CHECKS_PASSED'],
+    },
+    {
+      title: 'R1 | Age vs product minimum',
+      outcome: toDecisionLabel(row.status),
+      reasons: ['Mocked rule summary for age check'],
+    },
+    {
+      title: 'R2 | Product still active',
+      outcome: 'PASSED',
+      reasons: ['Mocked rule summary for product active check'],
+    },
+    {
+      title: 'R3 | Channel eligibility',
+      outcome: 'PASSED',
+      reasons: ['Mocked rule summary for channel eligibility check'],
+    },
+  ];
+}
+
+function mapLiveApplicant(payload) {
+  const app = payload?.application ?? payload;
+  const applicant = app?.applicant ?? {};
+  const product = app?.product ?? {};
+  const consents = app?.consents ?? {};
+
+  return {
+    fullName: applicant?.fullName ?? null,
+    dateOfBirth: applicant?.dateOfBirth ?? null,
+    productCode: product?.productCode ?? null,
+    requestedLimit:
+      typeof product?.requestedCreditLimit === 'number'
+        ? `GBP ${product.requestedCreditLimit.toLocaleString('en-GB')}`
+        : null,
+    channel: app?.channel ?? null,
+    residence: applicant?.countryOfResidence ?? null,
+    termsAccepted:
+      typeof consents?.termsAccepted === 'boolean' ? String(consents.termsAccepted) : null,
   };
 }
 
@@ -202,6 +281,7 @@ export default function RequestsScreen({ requests, error, loading, onLoad }) {
   const [toDate, setToDate] = useState('2026-07-21');
   const [hasAsked, setHasAsked] = useState(true);
   const [selectedApplicationId, setSelectedApplicationId] = useState(null);
+  const [liveApplicant, setLiveApplicant] = useState({ status: 'idle', data: null, error: null });
 
   const counts = useMemo(() => {
     const next = { All: requests.length };
@@ -287,10 +367,54 @@ export default function RequestsScreen({ requests, error, loading, onLoad }) {
     [requests, selectedApplicationId]
   );
 
+  useEffect(() => {
+    if (!selectedRow) {
+      setLiveApplicant({ status: 'idle', data: null, error: null });
+      return;
+    }
+
+    let cancelled = false;
+    setLiveApplicant({ status: 'loading', data: null, error: null });
+
+    onLoad()
+      .catch(() => undefined)
+      .then(() => undefined);
+
+    api
+      .getApplication(selectedRow.applicationId)
+      .then((payload) => {
+        if (cancelled) return;
+        setLiveApplicant({ status: 'ready', data: mapLiveApplicant(payload), error: null });
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setLiveApplicant({ status: 'error', data: null, error: e?.message ?? 'Unavailable' });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRow, onLoad]);
+
   if (selectedRow) {
-    const detail = detailFor(selectedRow);
+    const detailBase = detailFor(selectedRow);
+    const detail = {
+      ...detailBase,
+      rules: detailBase.rules?.length ? detailBase.rules : makeFallbackRules(selectedRow),
+    };
     const applicant = NAME_BY_APP_ID[selectedRow.applicationId] ?? 'Unknown applicant';
     const caseOutcome = toDecisionLabel(selectedRow.status);
+
+    const liveData = liveApplicant.data;
+    const applicantItems = [
+      ['Full name', liveData?.fullName ?? applicant],
+      ['Date of birth', liveData?.dateOfBirth ?? detail.dateOfBirth],
+      ['Product', liveData?.productCode ?? detail.productCode],
+      ['Requested limit', liveData?.requestedLimit ?? detail.requestedLimit],
+      ['Channel', liveData?.channel ?? detail.channel],
+      ['Residence', liveData?.residence ?? detail.residence],
+      ['Terms accepted', liveData?.termsAccepted ?? detail.termsAccepted],
+    ];
 
     return (
       <>
@@ -307,18 +431,18 @@ export default function RequestsScreen({ requests, error, loading, onLoad }) {
             <>
               <Card title="Applicant - live from orchestrator">
                 <KeyValue
-                  items={[
-                    ['Full name', applicant],
-                    ['Date of birth', detail.dateOfBirth],
-                    ['Product', detail.productCode],
-                    ['Requested limit', detail.requestedLimit],
-                    ['Channel', detail.channel],
-                    ['Residence', detail.residence],
-                    ['Terms accepted', detail.termsAccepted],
-                  ]}
+                  items={applicantItems}
                   keyWidth="45%"
                 />
               </Card>
+              {liveApplicant.status === 'loading' && (
+                <Caption>Loading applicant from orchestrator...</Caption>
+              )}
+              {liveApplicant.status === 'error' && (
+                <Caption>
+                  Orchestrator unavailable right now - sidebar is showing fallback values from mock data.
+                </Caption>
+              )}
               <Caption>
                 Nothing here is stored by this module - fetched on open via GET /applications/{'{id}'}
               </Caption>
@@ -332,7 +456,9 @@ export default function RequestsScreen({ requests, error, loading, onLoad }) {
                 title={rule.title}
                 headEnd={<Badge tone={toneForDecisionLabel(rule.outcome)}>{rule.outcome}</Badge>}
               >
-                {rule.description}
+                {Array.isArray(rule.reasons) && rule.reasons.length > 0
+                  ? rule.reasons.join(' | ')
+                  : 'No reason supplied'}
               </Card>
             ))}
           </div>
