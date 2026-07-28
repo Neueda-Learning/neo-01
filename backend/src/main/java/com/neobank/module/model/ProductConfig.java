@@ -62,6 +62,14 @@ public class ProductConfig {
     @Column(length = 255)
     private String channels;
 
+    /**
+     * Comma-separated employment statuses permitted for this product:
+     * {@code STUDENT}, {@code PERMANENT}, {@code SELF_EMPLOYED}, etc.
+     * Null means all employment statuses are permitted.
+     */
+    @Column(name = "allowed_employment_statuses", length = 255)
+    private String allowedEmploymentStatuses;
+
     /** When this version of the rules came into effect. */
     @Column(name = "effective_from", nullable = false)
     private Instant effectiveFrom;
@@ -72,7 +80,7 @@ public class ProductConfig {
 
     public ProductConfig(String productCode, Integer version, Integer minAge,
                          Integer limitMin, Integer limitMax, Boolean active,
-                         String channels, Instant effectiveFrom) {
+                         String channels, String allowedEmploymentStatuses, Instant effectiveFrom) {
         this.productCode = productCode;
         this.version = version;
         this.minAge = minAge;
@@ -80,6 +88,7 @@ public class ProductConfig {
         this.limitMax = limitMax;
         this.active = active;
         this.channels = channels;
+        this.allowedEmploymentStatuses = allowedEmploymentStatuses;
         this.effectiveFrom = effectiveFrom;
     }
 
@@ -91,5 +100,6 @@ public class ProductConfig {
     public Integer getLimitMax()   { return limitMax; }
     public Boolean getActive()     { return active; }
     public String getChannels()    { return channels; }
+    public String getAllowedEmploymentStatuses() { return allowedEmploymentStatuses; }
     public Instant getEffectiveFrom() { return effectiveFrom; }
 }

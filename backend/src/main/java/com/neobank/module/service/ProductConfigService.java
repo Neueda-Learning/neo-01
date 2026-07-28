@@ -38,6 +38,7 @@ public class ProductConfigService {
                 request.limitMax(),
                 request.active(),
                 channels,
+                null,
                 Instant.now()
         );
 
