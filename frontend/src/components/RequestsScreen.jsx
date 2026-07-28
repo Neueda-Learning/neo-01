@@ -280,16 +280,23 @@ export default function RequestsScreen({ requests, more, error, loading, onLoad 
   const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
-  const [fromDate, setFromDate] = useState('2026-07-01');
-  const [toDate, setToDate] = useState('2026-07-21');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [hasAsked, setHasAsked] = useState(false);
   const [selectedApplicationId, setSelectedApplicationId] = useState(null);
   const [liveApplicant, setLiveApplicant] = useState({ status: 'idle', data: null, error: null });
 
+  useEffect(() => {
+    if (requests.length > 0) {
+      setHasAsked(true);
+    }
+  }, [requests.length]);
+
   const counts = useMemo(() => {
     const next = { All: requests.length };
     for (const row of requests) {
-      next[row.status] = (next[row.status] ?? 0) + 1;
+      const outcome = toDecisionLabel(row.status);
+      next[outcome] = (next[outcome] ?? 0) + 1;
     }
     return next;
   }, [requests]);
@@ -299,7 +306,7 @@ export default function RequestsScreen({ requests, more, error, loading, onLoad 
 
     const needle = query.trim().toLowerCase();
     return requests.filter((r) => {
-      if (filter !== 'All' && r.status !== filter) return false;
+      if (filter !== 'All' && toDecisionLabel(r.status) !== filter) return false;
       const createdDate = r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : null;
       if (createdDate && fromDate && createdDate < fromDate) return false;
       if (createdDate && toDate && createdDate > toDate) return false;
