@@ -27,7 +27,7 @@ services:
       # `docker compose down -v` once or the sidecar cannot reach its schema.
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$${MYSQL_USER} -p$${MYSQL_PASSWORD}"]
+      test: [ "CMD-SHELL", "mysqladmin ping -h localhost -u$${MYSQL_USER} -p$${MYSQL_PASSWORD}" ]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -55,7 +55,7 @@ services:
       mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-fs", "http://localhost:8080/health"]
+      test: [ "CMD", "curl", "-fs", "http://localhost:8080/health" ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -71,7 +71,8 @@ services:
   # Do not replace this with a local path or a vendored copy. One repo, one copy — that is what
   # stops ten teams ending up with ten different mock orchestrators.
   sidecar:
-    build: https://github.com/Neueda-Learning/neobank-sidecar.git#${SIDECAR_REF:-v1}
+    build:
+      context: https://github.com/Neueda-Learning/neobank-sidecar.git#${SIDECAR_REF:-v1}
     environment:
       DB_URL: jdbc:mysql://mysql:3306/sidecar_db
       DB_USERNAME: ${DB_USERNAME:-appuser}
@@ -87,7 +88,7 @@ services:
       mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-fs", "http://localhost:8080/health"]
+      test: [ "CMD", "curl", "-fs", "http://localhost:8080/health" ]
       interval: 10s
       timeout: 5s
       retries: 12
