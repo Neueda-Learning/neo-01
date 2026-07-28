@@ -59,6 +59,7 @@ public class ApplicationService {
     private static final String RULE_AGE = "age";
     private static final String RULE_PRODUCT_ACTIVE = "productActive";
     private static final String RULE_CHANNEL = "channel";
+    private static final String RULE_EMPLOYMENT_STATUS = "employmentStatus";
     private static final Set<String> SUPPORTED_TAX_RESIDENCIES = Set.of("GB");
     private static final Set<String> HIGH_RISK_COUNTRIES = Set.of("IR");
     private static final Set<String> EXACT_NAME_BLOCKLIST = Set.of("VIKTOR PETROV");
@@ -266,6 +267,11 @@ public class ApplicationService {
         ruleResults.add(ruleNode(RULE_CHANNEL, channelReasons.isEmpty(),
                 reasonsOrAllPassed(channelReasons)));
         hardFailure = hardFailure || !channelReasons.isEmpty();
+
+        List<String> employmentStatusReasons = evaluateEmploymentStatus(app, config);
+        ruleResults.add(ruleNode(RULE_EMPLOYMENT_STATUS, employmentStatusReasons.isEmpty(),
+                reasonsOrAllPassed(employmentStatusReasons)));
+        hardFailure = hardFailure || !employmentStatusReasons.isEmpty();
 
         HighRiskEvaluation highRiskEvaluation = evaluateHighRiskCountry(app);
         reviewFlag = reviewFlag || highRiskEvaluation.reviewFlag();
@@ -669,6 +675,30 @@ public class ApplicationService {
 
         if (!allowed.contains(app.channel().toUpperCase())) {
             return List.of("VER_CHANNEL_NOT_ELIGIBLE");
+        }
+        return List.of();
+    }
+
+    private List<String> evaluateEmploymentStatus(Application app, ProductConfig config) {
+        // If product has no employment status restriction, this rule passes.
+        if (config == null || !hasText(config.getAllowedEmploymentStatuses())) {
+            return List.of();
+        }
+
+        // If application has no employment data, fail.
+        if (app == null || app.employment() == null || !hasText(app.employment().status())) {
+            return List.of("VER_MISSING_FIELD:employment.status");
+        }
+
+        // Check if application's employment status is in the allowed set.
+        Set<String> allowed = Stream.of(config.getAllowedEmploymentStatuses().split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(String::toUpperCase)
+                .collect(Collectors.toSet());
+
+        if (!allowed.contains(app.employment().status().toUpperCase())) {
+            return List.of("VER_EMPLOYMENT_STATUS_NOT_ELIGIBLE");
         }
         return List.of();
     }

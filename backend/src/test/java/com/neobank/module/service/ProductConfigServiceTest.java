@@ -40,7 +40,7 @@ class ProductConfigServiceTest {
 
     @Test
     void createsNewVersionWithIncrementedVersionNumber() {
-        repository.save(new ProductConfig("TEST_PRODUCT", 1, 18, 1000, 10000, true, "WEB", Instant.now()));
+        repository.save(new ProductConfig("TEST_PRODUCT", 1, 18, 1000, 10000, true, "WEB", null, Instant.now()));
 
         ProductVersionCreated created = service.createVersion(request("TEST_PRODUCT", 18, 1000, 10000, true, List.of("WEB")));
         assertThat(created.version()).isEqualTo(2);
@@ -51,7 +51,7 @@ class ProductConfigServiceTest {
 
     @Test
     void returnsAllVersionsOrderedOldestFirst() {
-        repository.save(new ProductConfig("TEST_PRODUCT", 1, 18, 500, 5000, true, "WEB", Instant.now()));
+        repository.save(new ProductConfig("TEST_PRODUCT", 1, 18, 500, 5000, true, "WEB", null, Instant.now()));
         service.createVersion(request("TEST_PRODUCT", 19, 600, 6000, true, List.of("WEB")));
 
         List<ProductVersionView> versions = service.getVersions("TEST_PRODUCT");
@@ -65,7 +65,7 @@ class ProductConfigServiceTest {
     @Test
     void returnsCreditCardRewardsVersionHistoryWithCurrentCheckpoint() {
         repository.save(new ProductConfig(
-                "CREDIT_CARD_REWARDS", 1, 18, 1000, 10000, true, "WEB,MOBILE_APP,BRANCH",
+                "CREDIT_CARD_REWARDS", 1, 18, 1000, 10000, true, "WEB,MOBILE_APP,BRANCH", null,
                 Instant.parse("2026-07-01T00:00:00Z")));
 
         service.createVersion(request("CREDIT_CARD_REWARDS", 18, 1200, 11000, true,
@@ -91,8 +91,8 @@ class ProductConfigServiceTest {
 
     @Test
     void returnsAllProductCodes() {
-        repository.save(new ProductConfig("PRODUCT_A", 1, 18, 500, 5000, true, "WEB", Instant.now()));
-        repository.save(new ProductConfig("PRODUCT_B", 1, 21, 1000, 10000, true, "MOBILE_APP", Instant.now()));
+        repository.save(new ProductConfig("PRODUCT_A", 1, 18, 500, 5000, true, "WEB", null, Instant.now()));
+        repository.save(new ProductConfig("PRODUCT_B", 1, 21, 1000, 10000, true, "MOBILE_APP", null, Instant.now()));
 
         List<String> codes = service.getAllProductCodes();
         assertThat(codes).containsExactly("PRODUCT_A", "PRODUCT_B");
@@ -137,7 +137,7 @@ class ProductConfigServiceTest {
     @Test
     void seedDataExistsOnFirstBoot() {
         repository.deleteAll();
-        repository.save(new ProductConfig("SEED_TEST", 1, 18, 1000, 10000, true, "WEB,MOBILE_APP,BRANCH", Instant.parse("2026-07-01T00:00:00Z")));
+        repository.save(new ProductConfig("SEED_TEST", 1, 18, 1000, 10000, true, "WEB,MOBILE_APP,BRANCH", null, Instant.parse("2026-07-01T00:00:00Z")));
 
         List<ProductVersionView> versions = service.getVersions("SEED_TEST");
         assertThat(versions).hasSize(1);

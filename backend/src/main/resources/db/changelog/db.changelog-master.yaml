@@ -14,3 +14,7 @@ databaseChangeLog:
       file: db/changelog/changes/005-add-full-name.yaml
   - include:
       file: db/changelog/changes/006-seed-product-config-rewards-history.yaml
+  - include:
+      file: db/changelog/changes/007-add-employment-status-config.yaml
+  - include:
+      file: db/changelog/changes/008-seed-employment-status-config.yaml

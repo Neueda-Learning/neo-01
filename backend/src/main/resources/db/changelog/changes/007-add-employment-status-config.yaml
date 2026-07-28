@@ -1,0 +1,14 @@
+databaseChangeLog:
+
+  - changeSet:
+      id: 007-add-allowed-employment-statuses
+      author: neo-01
+      comment: Add allowed_employment_statuses column to product_config for UC-08
+      changes:
+        - addColumn:
+            tableName: product_config
+            columns:
+              - column:
+                  name: allowed_employment_statuses
+                  type: varchar(255)
+                  remarks: "Comma-separated employment statuses permitted for this product (STUDENT, PERMANENT, SELF_EMPLOYED, etc). Null means no restriction."

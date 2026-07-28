@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 /**
- * UC-00 acceptance criteria (unit level — no Spring, no DB, no HTTP).
+ * UC-00 acceptance criteria (unit level 鈥?no Spring, no DB, no HTTP).
  *
  * <p>
  * The executor is replaced with {@code Runnable::run} so both the accept phase
@@ -74,11 +74,11 @@ class ApplicationServiceTest {
     void insertsInProgressThenDecidesToAccepted() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 15000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 15000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         service.processApplicationAsync(request("SIM-01"));
 
-        // Phase 1 (accept) → IN_PROGRESS; Phase 2 (decide) → PASSED
+        // Phase 1 (accept) 鈫?IN_PROGRESS; Phase 2 (decide) 鈫?PASSED
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
         assertThat(saved.getAllValues().get(0).getOutcome()).isEqualTo("IN_PROGRESS");
@@ -90,7 +90,7 @@ class ApplicationServiceTest {
                 "VER_ALL_CHECKS_PASSED");
     }
 
-    /** AC-4: duplicate IN_PROGRESS — acknowledged, not re-queued. */
+    /** AC-4: duplicate IN_PROGRESS 鈥?acknowledged, not re-queued. */
     @Test
     void idempotentForDuplicateInProgressApplication() {
         when(verificationRecords.findById("SIM-DUP")).thenReturn(Optional.of(
@@ -102,7 +102,7 @@ class ApplicationServiceTest {
         verifyNoMoreInteractions(orchestrator);
     }
 
-    /** AC-4: duplicate already-decided — callback replayed with stored outcome. */
+    /** AC-4: duplicate already-decided 鈥?callback replayed with stored outcome. */
     @Test
     void replaysCallbackForAlreadyDecidedApplication() {
         when(verificationRecords.findById("SIM-DEC")).thenReturn(Optional.of(
@@ -122,7 +122,7 @@ class ApplicationServiceTest {
     void aFailureInTheDecidePhaseIsStillReportedAsReferred() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 15000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 15000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         // First save (IN_PROGRESS accept phase) succeeds; second (decide phase) throws.
         when(verificationRecords.save(any(VerificationRecord.class)))
@@ -164,7 +164,7 @@ class ApplicationServiceTest {
                 "[{\"ruleName\":\"age\",\"passed\":true,\"reasonCodes\":[\"VER_ALL_CHECKS_PASSED\"]}]", null);
         when(verificationRecords.findById("SIM-CASE-1")).thenReturn(Optional.of(row));
         when(productConfigs.findById(42L)).thenReturn(Optional.of(new ProductConfig(
-                "CREDIT_CARD_REWARDS", 3, 18, 500, 15000, true, "WEB,MOBILE_APP", Instant.now())));
+                "CREDIT_CARD_REWARDS", 3, 18, 500, 15000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         var detail = service.findCase("SIM-CASE-1");
 
@@ -187,7 +187,7 @@ class ApplicationServiceTest {
     void belowMinimumAgeIsRejected() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 15000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 15000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-AGE-FAIL", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -211,7 +211,7 @@ class ApplicationServiceTest {
     void exactMinimumAgeIsAcceptedWhenOtherRulesPass() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 15000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 15000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-REVIEW-WINS", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -238,7 +238,7 @@ class ApplicationServiceTest {
     void requestedLimitAtMaximumIsAccepted() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-LIMIT-EDGE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -266,7 +266,7 @@ class ApplicationServiceTest {
     void requestedLimitAboveMaximumIsRejected() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-LIMIT-HIGH", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -290,7 +290,7 @@ class ApplicationServiceTest {
     void missingApplicantAndEmploymentFieldsAreRejected() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-08-LIKE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -323,7 +323,7 @@ class ApplicationServiceTest {
     void unsupportedTaxResidencyIsRejected() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-11-LIKE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -352,7 +352,7 @@ class ApplicationServiceTest {
     void expiredIdentityDocumentIsRejected() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-13-LIKE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -381,7 +381,7 @@ class ApplicationServiceTest {
     void identityDocumentIdMustMatchIssuingCountryPrefix() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-14-LIKE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -411,7 +411,7 @@ class ApplicationServiceTest {
     void exactNameMatchIsRejected() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-15-LIKE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -440,7 +440,7 @@ class ApplicationServiceTest {
     void partialNameMatchIsReferred() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-16-LIKE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -469,7 +469,7 @@ class ApplicationServiceTest {
     void highRiskCountryIsReferred() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-17-LIKE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -498,7 +498,7 @@ class ApplicationServiceTest {
     void affordabilityDtiAtBoundaryIsAccepted() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_STANDARD"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_STANDARD", 1, 18, 500, 5000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_STANDARD", 1, 18, 500, 5000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-19-LIKE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -526,7 +526,7 @@ class ApplicationServiceTest {
     void affordabilityDtiAboveBoundaryIsRejected() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_STANDARD"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_STANDARD", 1, 18, 500, 5000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_STANDARD", 1, 18, 500, 5000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-20-LIKE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -555,7 +555,7 @@ class ApplicationServiceTest {
     void alternateDeliveryWithoutAddressIsRejected() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-22-LIKE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -584,7 +584,7 @@ class ApplicationServiceTest {
     void alternateDeliveryWithAddressIsReferred() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-21-LIKE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -615,7 +615,7 @@ class ApplicationServiceTest {
     void annualIncomeBelowMinimumIsRejected() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-18-LIKE", "MOBILE_APP", "2026-07-25T09:14:00Z",
@@ -644,7 +644,7 @@ class ApplicationServiceTest {
     void studentProductHasNoMinimumIncomeRequirement() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_STUDENT"))
                 .thenReturn(Optional.of(new ProductConfig(
-                        "CREDIT_CARD_STUDENT", 1, 18, 500, 3000, true, "WEB,MOBILE_APP", Instant.now())));
+                        "CREDIT_CARD_STUDENT", 1, 18, 500, 3000, true, "WEB,MOBILE_APP", null, Instant.now())));
 
         Application app = new Application(
                 "SIM-03-LIKE", "MOBILE_APP", "2026-07-28T09:14:00Z",
@@ -666,5 +666,94 @@ class ApplicationServiceTest {
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
         assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("PASSED");
+    }
+
+    @Test
+    void studentCardWithStudentStatusPasses() {
+        when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_STUDENT"))
+                .thenReturn(Optional.of(new ProductConfig(
+                        "CREDIT_CARD_STUDENT", 2, 18, 500, 3000, true, "WEB,MOBILE_APP", "STUDENT", Instant.now())));
+
+        Application app = new Application(
+                "SIM-UC08-01", "WEB", "2026-07-28T10:00:00Z",
+                new Application.Applicant("Emma Thompson", "2005-09-15",
+                        "emma.thompson@example.com", "+447700900300", "GB", "GB",
+                        java.util.List.of("GB"), "RENTING",
+                        new Application.Address("10 University Avenue", null, "Cambridge", "CB2 1TN", "GB"),
+                        19, 0),
+                new Application.IdentityDocument("PASSPORT", "GB0000123", "GB", "2034-12-20"),
+                new Application.Employment("STUDENT", "University of Cambridge", 0),
+                new Application.Finances(0, 0, 0),
+                new Application.Product("CREDIT_CARD_STUDENT", 2000),
+                new Application.Delivery(true, null),
+                new Application.Consents(true, true, false));
+
+        service.processApplicationAsync(new ApplicationRequest("SIM-UC08-01", "corr-uc08-01",
+                "process-application", app));
+
+        ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
+        verify(verificationRecords, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("PASSED");
+        assertThat(saved.getAllValues().get(1).getRuleResults()).contains("employmentStatus")
+                .doesNotContain("VER_EMPLOYMENT_STATUS_NOT_ELIGIBLE");
+    }
+
+    @Test
+    void studentCardWithPermanentStatusFails() {
+        when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_STUDENT"))
+                .thenReturn(Optional.of(new ProductConfig(
+                        "CREDIT_CARD_STUDENT", 2, 18, 500, 3000, true, "WEB,MOBILE_APP", "STUDENT", Instant.now())));
+
+        Application app = new Application(
+                "SIM-UC08-02", "WEB", "2026-07-28T10:00:00Z",
+                new Application.Applicant("James Wilson", "1995-03-20",
+                        "james.wilson@example.com", "+447700900301", "GB", "GB",
+                        java.util.List.of("GB"), "RENTING",
+                        new Application.Address("42 High Street", null, "London", "E1 6AN", "GB"),
+                        31, 24),
+                new Application.IdentityDocument("PASSPORT", "GB0000456", "GB", "2032-08-15"),
+                new Application.Employment("PERMANENT", "Tech Solutions Ltd", 60),
+                new Application.Finances(55000, 1500, 180),
+                new Application.Product("CREDIT_CARD_STUDENT", 2000),
+                new Application.Delivery(true, null),
+                new Application.Consents(true, true, false));
+
+        service.processApplicationAsync(new ApplicationRequest("SIM-UC08-02", "corr-uc08-02",
+                "process-application", app));
+
+        ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
+        verify(verificationRecords, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("FAILED");
+        assertThat(saved.getAllValues().get(1).getRuleResults()).contains("VER_EMPLOYMENT_STATUS_NOT_ELIGIBLE");
+    }
+
+    @Test
+    void standardCardHasNoEmploymentRestriction() {
+        when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_STANDARD"))
+                .thenReturn(Optional.of(new ProductConfig(
+                        "CREDIT_CARD_STANDARD", 2, 18, 500, 5000, true, "WEB,MOBILE_APP", null, Instant.now())));
+
+        Application app = new Application(
+                "SIM-UC08-03", "WEB", "2026-07-28T10:00:00Z",
+                new Application.Applicant("Sofia Garcia", "1998-07-10",
+                        "sofia.garcia@example.com", "+447700900302", "ES", "GB",
+                        java.util.List.of("GB"), "RENTING",
+                        new Application.Address("5 Elm Street", null, "Manchester", "M1 1AD", "GB"),
+                        26, 12),
+                new Application.IdentityDocument("PASSPORT", "ES0000789", "ES", "2031-11-03"),
+                new Application.Employment("SELF_EMPLOYED", "Freelance Consultant", 24),
+                new Application.Finances(48000, 1200, 180),
+                new Application.Product("CREDIT_CARD_STANDARD", 3500),
+                new Application.Delivery(true, null),
+                new Application.Consents(true, true, false));
+
+        service.processApplicationAsync(new ApplicationRequest("SIM-UC08-03", "corr-uc08-03",
+                "process-application", app));
+
+        ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
+        verify(verificationRecords, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("PASSED");
+        // Employment status restriction should not affect unrestricted products
+        assertThat(saved.getAllValues().get(1).getRuleResults()).doesNotContain("VER_EMPLOYMENT_STATUS_NOT_ELIGIBLE");
     }
 }

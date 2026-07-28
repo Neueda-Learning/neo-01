@@ -1,0 +1,55 @@
+databaseChangeLog:
+
+  - changeSet:
+      id: 008-seed-student-employment-status-v2
+      author: neo-01
+      comment: Seed version 2 for CREDIT_CARD_STUDENT with employment status restriction
+      changes:
+        - insert:
+            tableName: product_config
+            columns:
+              - column: { name: product_code, value: 'CREDIT_CARD_STUDENT' }
+              - column: { name: version, valueNumeric: 2 }
+              - column: { name: min_age, valueNumeric: 18 }
+              - column: { name: limit_min, valueNumeric: 500 }
+              - column: { name: limit_max, valueNumeric: 3000 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: channels, value: 'WEB,MOBILE_APP' }
+              - column: { name: allowed_employment_statuses, value: 'STUDENT' }
+              - column: { name: effective_from, value: '2026-07-28 00:00:00' }
+
+  - changeSet:
+      id: 008-seed-standard-no-employment-restriction-v2
+      author: neo-01
+      comment: Seed version 2 for CREDIT_CARD_STANDARD (no employment restriction)
+      changes:
+        - insert:
+            tableName: product_config
+            columns:
+              - column: { name: product_code, value: 'CREDIT_CARD_STANDARD' }
+              - column: { name: version, valueNumeric: 2 }
+              - column: { name: min_age, valueNumeric: 18 }
+              - column: { name: limit_min, valueNumeric: 500 }
+              - column: { name: limit_max, valueNumeric: 5000 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: channels, value: 'WEB,MOBILE_APP' }
+              - column: { name: allowed_employment_statuses, value: null }
+              - column: { name: effective_from, value: '2026-07-28 00:00:00' }
+
+  - changeSet:
+      id: 008-seed-rewards-no-employment-restriction-v5
+      author: neo-01
+      comment: Seed version 5 for CREDIT_CARD_REWARDS (no employment restriction)
+      changes:
+        - insert:
+            tableName: product_config
+            columns:
+              - column: { name: product_code, value: 'CREDIT_CARD_REWARDS' }
+              - column: { name: version, valueNumeric: 5 }
+              - column: { name: min_age, valueNumeric: 20 }
+              - column: { name: limit_min, valueNumeric: 2000 }
+              - column: { name: limit_max, valueNumeric: 15000 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: channels, value: 'WEB,BRANCH' }
+              - column: { name: allowed_employment_statuses, value: null }
+              - column: { name: effective_from, value: '2026-07-28 00:00:00' }
