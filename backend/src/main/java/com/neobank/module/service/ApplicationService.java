@@ -7,6 +7,7 @@ import com.neobank.module.model.Decision;
 import com.neobank.module.model.VerificationRecord;
 import com.neobank.module.repository.VerificationRecordRepository;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,16 +65,34 @@ public class ApplicationService {
     /**
      * Inserts an {@code IN_PROGRESS} row for the given application.
      *
-     * <p>Idempotent: if a row already exists the method returns {@code false} and
-     * nothing is written. The {@code save()} call runs in its own transaction (Spring
-     * Data default) so the insert is committed before this method returns.</p>
-     *
-     * @return {@code true} if a new row was inserted; {@code false} if already present.
+     * <p>Idempotent by applicationId:</p>
+     * <ul>
+     *   <li>No existing row — inserts IN_PROGRESS and returns {@code true}.</li>
+     *   <li>Existing row still IN_PROGRESS — returns {@code false} (worker is already running).</li>
+     *   <li>Existing row already decided — replays the stored callback async and returns
+     *       {@code false} (no re-processing, AC-4).</li>
+     * </ul>
      */
     boolean acceptRequest(ApplicationRequest request) {
         String id = request.applicationId();
-        if (verificationRecords.existsById(id)) {
-            log.info("Duplicate /execute for {} — acknowledged, not re-processing", id);
+        Optional<VerificationRecord> existing = verificationRecords.findById(id);
+        if (existing.isPresent()) {
+            VerificationRecord record = existing.get();
+            if (!record.getOutcome().equals(Decision.IN_PROGRESS.name())) {
+                // Already decided — replay the stored outcome as the callback (AC-4).
+                log.info("Duplicate /execute for {} (decided: {}) — replaying callback",
+                        id, record.getOutcome());
+                executor.execute(() -> {
+                    try {
+                        orchestrator.applicationStatusUpdate(
+                                id, Decision.valueOf(record.getOutcome()), record.getReference());
+                    } catch (RuntimeException e) {
+                        log.error("Callback replay failed for {}", id, e);
+                    }
+                });
+            } else {
+                log.info("Duplicate /execute for {} (still in-progress) — acknowledged", id);
+            }
             return false;
         }
         verificationRecords.save(new VerificationRecord(
