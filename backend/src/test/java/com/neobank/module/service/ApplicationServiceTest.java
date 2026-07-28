@@ -16,6 +16,7 @@ import com.neobank.module.integrations.orchestrator.OrchestratorClient;
 import com.neobank.module.model.Decision;
 import com.neobank.module.model.VerificationRecord;
 import com.neobank.module.repository.VerificationRecordRepository;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -37,8 +38,8 @@ class ApplicationServiceTest {
         verificationRecords = mock(VerificationRecordRepository.class);
         orchestrator = mock(OrchestratorClient.class);
         service = new ApplicationService(Runnable::run, verificationRecords, orchestrator);
-        // Default: not a duplicate, and save returns the entity unchanged.
-        when(verificationRecords.existsById(any())).thenReturn(false);
+        // Default: no existing row.
+        when(verificationRecords.findById(any())).thenReturn(Optional.empty());
         when(verificationRecords.save(any(VerificationRecord.class))).thenAnswer(call -> call.getArgument(0));
     }
 
@@ -69,15 +70,28 @@ class ApplicationServiceTest {
                 "hello world from processApplication");
     }
 
-    /** AC-4: duplicate applicationId → no second insert, no second decision. */
+    /** AC-4: duplicate IN_PROGRESS — acknowledged, not re-queued. */
     @Test
-    void idempotentForDuplicateApplicationId() {
-        when(verificationRecords.existsById("SIM-DUP")).thenReturn(true);
+    void idempotentForDuplicateInProgressApplication() {
+        when(verificationRecords.findById("SIM-DUP")).thenReturn(Optional.of(
+                new VerificationRecord("SIM-DUP", Decision.IN_PROGRESS, "pending", null, null)));
 
         service.processApplicationAsync(request("SIM-DUP"));
 
         verify(verificationRecords, never()).save(any());
         verifyNoMoreInteractions(orchestrator);
+    }
+
+    /** AC-4: duplicate already-decided — callback replayed with stored outcome. */
+    @Test
+    void replaysCallbackForAlreadyDecidedApplication() {
+        when(verificationRecords.findById("SIM-DEC")).thenReturn(Optional.of(
+                new VerificationRecord("SIM-DEC", Decision.ACCEPTED, "previous decision", null, null)));
+
+        service.processApplicationAsync(request("SIM-DEC"));
+
+        verify(verificationRecords, never()).save(any());
+        verify(orchestrator).applicationStatusUpdate("SIM-DEC", Decision.ACCEPTED, "previous decision");
     }
 
     /** Guard: a failure in the decide phase is still reported rather than timing out the journey. */
