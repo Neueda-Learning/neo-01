@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Aggregates reason codes from the embedded {@code ruleResults} JSON over a date window.
  * Counting is per reason entry, not per case — one case can contribute multiple entries for
  * the same code. The {@code kind} ("failure" or "review") is derived from the record's
- * {@code outcome}: {@code REFERRED} → review, anything else → failure.</p>
+ * {@code outcome}: {@code REVIEW} → review, anything else → failure.</p>
  *
  * <p>No rows are written — this service is strictly read-only.</p>
  */
@@ -45,7 +45,7 @@ public class ReasonCodeService {
      *
      * <p>Results are ranked descending by count. An empty window returns an empty list,
      * never throws (AC4). The {@code kind} field is derived from the record's {@code outcome}:
-     * REFERRED → "review", REJECTED → "failure".</p>
+     * REVIEW → "review", anything else → "failure".</p>
      *
      * @param from start date (inclusive), treated as midnight UTC
      * @param to   end date (inclusive), treated as end-of-day UTC (exclusive next day)
@@ -60,7 +60,7 @@ public class ReasonCodeService {
 
         Map<CodeKey, Long> counts = new LinkedHashMap<>();
         for (VerificationRecord record : records) {
-            String kind = "REFERRED".equals(record.getOutcome()) ? "review" : "failure";
+            String kind = "REVIEW".equals(record.getOutcome()) ? "review" : "failure";
             for (String code : extractCodes(record.getRuleResults())) {
                 counts.merge(new CodeKey(code, kind), 1L, Long::sum);
             }

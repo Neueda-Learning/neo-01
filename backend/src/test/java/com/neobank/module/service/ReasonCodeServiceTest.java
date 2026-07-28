@@ -63,9 +63,9 @@ class ReasonCodeServiceTest {
     void seedWindowTopCodeIsVER_MISSING_FIELD_with5() {
         when(repository.findRecordsInWindow(any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(
-                        rec("fp-001", Decision.REJECTED, RULE_RESULTS_001),
-                        rec("fp-002", Decision.REJECTED, RULE_RESULTS_002),
-                        rec("fp-003", Decision.REFERRED, RULE_RESULTS_003)));
+                        rec("fp-001", Decision.FAILED, RULE_RESULTS_001),
+                        rec("fp-002", Decision.FAILED, RULE_RESULTS_002),
+                        rec("fp-003", Decision.REVIEW, RULE_RESULTS_003)));
 
         List<CodeCount> result = service.reasonCodeCounts(
                 LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 14));
@@ -79,9 +79,9 @@ class ReasonCodeServiceTest {
     void resultsAreRankedDescending() {
         when(repository.findRecordsInWindow(any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(
-                        rec("fp-001", Decision.REJECTED, RULE_RESULTS_001),
-                        rec("fp-002", Decision.REJECTED, RULE_RESULTS_002),
-                        rec("fp-003", Decision.REFERRED, RULE_RESULTS_003)));
+                        rec("fp-001", Decision.FAILED, RULE_RESULTS_001),
+                        rec("fp-002", Decision.FAILED, RULE_RESULTS_002),
+                        rec("fp-003", Decision.REVIEW, RULE_RESULTS_003)));
 
         List<CodeCount> result = service.reasonCodeCounts(
                 LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 14));
@@ -95,8 +95,8 @@ class ReasonCodeServiceTest {
     void kindIsDerivedFromOutcome() {
         when(repository.findRecordsInWindow(any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(
-                        rec("fp-001", Decision.REJECTED, RULE_RESULTS_001),
-                        rec("fp-003", Decision.REFERRED, RULE_RESULTS_003)));
+                        rec("fp-001", Decision.FAILED, RULE_RESULTS_001),
+                        rec("fp-003", Decision.REVIEW, RULE_RESULTS_003)));
 
         List<CodeCount> result = service.reasonCodeCounts(
                 LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 14));
@@ -126,7 +126,7 @@ class ReasonCodeServiceTest {
     void windowWithNoReasonCodesReturnsEmptyList() {
         String noReasonCodes = "[{\"rule\":\"age\",\"pass\":true}]";
         when(repository.findRecordsInWindow(any(Instant.class), any(Instant.class)))
-                .thenReturn(List.of(rec("fp-x", Decision.ACCEPTED, noReasonCodes)));
+                .thenReturn(List.of(rec("fp-x", Decision.PASSED, noReasonCodes)));
 
         assertThat(service.reasonCodeCounts(
                 LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 14))).isEmpty();
@@ -137,8 +137,8 @@ class ReasonCodeServiceTest {
     void malformedRuleResultsAreSkippedGracefully() {
         when(repository.findRecordsInWindow(any(Instant.class), any(Instant.class)))
                 .thenReturn(List.of(
-                        rec("fp-bad", Decision.REJECTED, "not-json"),
-                        rec("fp-003", Decision.REFERRED, RULE_RESULTS_003)));
+                        rec("fp-bad", Decision.FAILED, "not-json"),
+                        rec("fp-003", Decision.REVIEW, RULE_RESULTS_003)));
 
         List<CodeCount> result = service.reasonCodeCounts(
                 LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 14));

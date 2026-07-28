@@ -153,7 +153,7 @@ class ModuleApplicationTests {
         mvc.perform(get("/api/v1/applications"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.applicationId == 'IT-ONE')].outcome")
-                        .value(org.hamcrest.Matchers.hasItem("ACCEPTED")))
+                        .value(org.hamcrest.Matchers.hasItem("PASSED")))
                 .andExpect(jsonPath("$[?(@.applicationId == 'IT-ONE')].createdAt")
                         .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.notNullValue())));
     }

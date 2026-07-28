@@ -2,9 +2,13 @@ package com.neobank.module.service;
 
 import com.neobank.module.dto.ApplicantView;
 import com.neobank.module.dto.CaseSearchResult;
+import com.neobank.module.dto.OverrideCaseRequest;
 import com.neobank.module.integrations.orchestrator.Application;
 import com.neobank.module.integrations.orchestrator.OrchestratorClient;
+import com.neobank.module.model.Decision;
+import com.neobank.module.model.OverrideLog;
 import com.neobank.module.model.VerificationRecord;
+import com.neobank.module.repository.OverrideLogRepository;
 import com.neobank.module.repository.VerificationRecordRepository;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,6 +18,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Case search — UC-01.
@@ -32,10 +37,14 @@ public class CaseService {
     private static final int DEFAULT_LIMIT = 10;
 
     private final VerificationRecordRepository cases;
+    private final OverrideLogRepository overrideLogs;
     private final OrchestratorClient orchestrator;
 
-    public CaseService(VerificationRecordRepository cases, OrchestratorClient orchestrator) {
+    public CaseService(VerificationRecordRepository cases, 
+                       OverrideLogRepository overrideLogs,
+                       OrchestratorClient orchestrator) {
         this.cases = cases;
+        this.overrideLogs = overrideLogs;
         this.orchestrator = orchestrator;
     }
 
@@ -84,6 +93,49 @@ public class CaseService {
                 new ApplicantView.ConsentsView(
                         consents == null ? null : consents.termsAccepted()));
     }
+
+    /**
+     * UC-05: Override Case — manually change a case's outcome.
+     *
+     * <p>Updates the verification record's outcome and logs the change to the override_log.
+     * Then notifies the orchestrator with the new outcome so a parked journey resumes.</p>
+     *
+     * @param applicationId the case to override
+     * @param request       {newOutcome, reason, operator}
+     * @return the updated case details
+     * @throws NoSuchElementException if the applicationId does not exist
+     */
+    @Transactional
+    public Map<String, Object> override(String applicationId, OverrideCaseRequest request) {
+        // Find the existing case
+        VerificationRecord record = cases.findById(applicationId)
+                .orElseThrow(() -> new NoSuchElementException("Unknown applicationId: " + applicationId));
+
+        // Capture the old outcome
+        Decision oldDecision = Decision.valueOf(record.getOutcome());
+        Decision newDecision = Decision.valueOf(request.newOutcome());
+
+        // Update the verification record
+        record.setOutcome(newDecision.name());
+        cases.save(record);
+
+        // Log the override
+        OverrideLog log = new OverrideLog(applicationId, oldDecision, newDecision, 
+                request.reason(), request.operator());
+        overrideLogs.save(log);
+
+        // Notify the orchestrator
+        orchestrator.applicationStatusUpdate(applicationId, newDecision, 
+                "local-manual override: " + request.reason());
+
+        // Return updated case details
+        return Map.of(
+                "applicationId", applicationId,
+                "outcome", record.getOutcome(),
+                "reference", record.getReference()
+        );
+    }
+
 
     // ── internal helpers ────────────────────────────────────────────────────────
 
