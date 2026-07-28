@@ -18,3 +18,7 @@ databaseChangeLog:
       file: db/changelog/changes/007-add-employment-status-config.yaml
   - include:
       file: db/changelog/changes/008-seed-employment-status-config.yaml
+  - include:
+      file: db/changelog/changes/009-seed-product-config-rewards-v6.yaml
+  - include:
+      file: db/changelog/changes/010-seed-product-config-standard-v3.yaml
