@@ -73,9 +73,9 @@ public class ReasonCodeService {
     }
 
     /**
-     * Parse one {@code ruleResults} JSON string and return all {@code reasonCode} values found.
-     * Malformed JSON is silently skipped so a corrupt row never prevents the endpoint from
-     * returning.
+     * Parse one {@code ruleResults} JSON string and return all reason codes found.
+     * Supports both formats: {@code reasonCodes} array (current) and {@code reasonCode} scalar (legacy).
+     * Malformed JSON is silently skipped so a corrupt row never prevents the endpoint from returning.
      *
      * @return list of reason code strings; empty on null, blank, or malformed input
      */
@@ -83,11 +83,29 @@ public class ReasonCodeService {
         if (ruleResults == null || ruleResults.isBlank()) return List.of();
         try {
             List<Map<String, Object>> rules = MAPPER.readValue(ruleResults, RULE_LIST);
-            return rules.stream()
-                    .map(r -> r.get("reasonCode"))
-                    .filter(c -> c != null && !c.toString().isBlank())
-                    .map(Object::toString)
-                    .toList();
+            List<String> codes = new java.util.ArrayList<>();
+            
+            for (Map<String, Object> rule : rules) {
+                // Current format: reasonCodes array
+                Object reasonCodesObj = rule.get("reasonCodes");
+                if (reasonCodesObj instanceof List) {
+                    ((List<?>) reasonCodesObj).stream()
+                            .filter(c -> c != null && !c.toString().isBlank())
+                            .map(Object::toString)
+                            .forEach(codes::add);
+                } else if (reasonCodesObj != null && !reasonCodesObj.toString().isBlank()) {
+                    // Single value fallback
+                    codes.add(reasonCodesObj.toString());
+                }
+                
+                // Legacy format: reasonCode scalar
+                Object reasonCodeObj = rule.get("reasonCode");
+                if (reasonCodeObj != null && !reasonCodeObj.toString().isBlank()) {
+                    codes.add(reasonCodeObj.toString());
+                }
+            }
+            
+            return codes;
         } catch (Exception ignored) {
             return List.of();
         }

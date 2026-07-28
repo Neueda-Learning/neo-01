@@ -11,6 +11,7 @@ import {
   Split,
 } from '../design-system';
 import { api } from '../api.js';
+import NewProductVersionModal from './NewProductVersionModal.jsx';
 
 const MOCK_PRODUCT_ROWS = [
   {
@@ -92,6 +93,8 @@ export default function ProductConfigurationScreen() {
   const [productRows, setProductRows] = useState(MOCK_PRODUCT_ROWS);
   const [versionHistory, setVersionHistory] = useState(MOCK_VERSION_HISTORY);
   const [loadError, setLoadError] = useState(null);
+  const [showNewVersionModal, setShowNewVersionModal] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,7 +162,7 @@ export default function ProductConfigurationScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshTrigger]);
 
   const selectedHistory = useMemo(
     () => versionHistory[selectedProductCode] ?? [],
@@ -233,10 +236,22 @@ export default function ProductConfigurationScreen() {
           />
 
           <div className="product-config-actions">
-            <Button variant="primary">New version...</Button>
+            <Button variant="primary" onClick={() => setShowNewVersionModal(true)}>
+              New version...
+            </Button>
           </div>
         </div>
       </Split>
+
+      {showNewVersionModal && (
+        <NewProductVersionModal
+          productCode={selectedProductCode}
+          onClose={() => setShowNewVersionModal(false)}
+          onSuccess={() => {
+            setRefreshTrigger((prev) => prev + 1);
+          }}
+        />
+      )}
     </>
   );
 }

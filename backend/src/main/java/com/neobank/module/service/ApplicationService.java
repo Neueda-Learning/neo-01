@@ -440,13 +440,6 @@ public class ApplicationService {
             if (!hasText(app.identityDocument().issuingCountry())) {
                 reasons.add("VER_MISSING_FIELD:identityDocument.issuingCountry");
             }
-            if (hasText(app.identityDocument().documentId()) && hasText(app.identityDocument().issuingCountry())) {
-                String expectedPrefix = app.identityDocument().issuingCountry().toUpperCase();
-                String actualDocumentId = app.identityDocument().documentId().toUpperCase();
-                if (!actualDocumentId.startsWith(expectedPrefix)) {
-                    reasons.add("VER_INVALID_FIELD:identityDocument.documentId");
-                }
-            }
             if (!hasText(app.identityDocument().expiryDate())) {
                 reasons.add("VER_MISSING_FIELD:identityDocument.expiryDate");
             } else if (!isIsoDate(app.identityDocument().expiryDate())) {

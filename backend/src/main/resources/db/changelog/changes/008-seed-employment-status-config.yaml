@@ -50,6 +50,6 @@ databaseChangeLog:
               - column: { name: limit_min, valueNumeric: 2000 }
               - column: { name: limit_max, valueNumeric: 15000 }
               - column: { name: active, valueBoolean: true }
-              - column: { name: channels, value: 'WEB,BRANCH' }
+              - column: { name: channels, value: 'WEB,MOBILE_APP,BRANCH' }
               - column: { name: allowed_employment_statuses, value: null }
               - column: { name: effective_from, value: '2026-07-28 00:00:00' }

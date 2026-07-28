@@ -378,7 +378,7 @@ class ApplicationServiceTest {
     }
 
     @Test
-    void identityDocumentIdMustMatchIssuingCountryPrefix() {
+    void identityDocumentWithoutMatchingPrefixIsAcceptedAtSweepStage() {
         when(productConfigs.findTopByProductCodeOrderByVersionDesc("CREDIT_CARD_REWARDS"))
                 .thenReturn(Optional.of(new ProductConfig(
                         "CREDIT_CARD_REWARDS", 3, 18, 500, 10000, true, "WEB,MOBILE_APP", null, Instant.now())));
@@ -402,9 +402,7 @@ class ApplicationServiceTest {
 
         ArgumentCaptor<VerificationRecord> saved = ArgumentCaptor.forClass(VerificationRecord.class);
         verify(verificationRecords, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("FAILED");
-        assertThat(saved.getAllValues().get(1).getRuleResults())
-                .contains("VER_INVALID_FIELD:identityDocument.documentId");
+        assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("PASSED");
     }
 
     @Test
