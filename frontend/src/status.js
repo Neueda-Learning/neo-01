@@ -7,6 +7,9 @@
 import { TONES, toneMapper } from './design-system';
 
 export const statusTone = toneMapper({
+  PASSED: TONES.POSITIVE,
+  FAILED: TONES.NEGATIVE,
+  REVIEW: TONES.WARNING,
   ACCEPTED: TONES.POSITIVE,
   REJECTED: TONES.NEGATIVE,
   REFERRED: TONES.WARNING,
@@ -16,13 +19,18 @@ export const statusTone = toneMapper({
 });
 
 /**
- * The statuses the board filters on — the three a module can answer with.
- *
- * `in-progress` is not here on purpose: the placeholder writes its row after the work, so no row
- * is ever in that state and a chip for it would always read zero. Add it if you change that.
+ * Statuses exposed as board filters.
  */
-export const STATUSES = ['ACCEPTED', 'REJECTED', 'REFERRED'];
+export const STATUSES = ['PASSED', 'FAILED', 'REVIEW'];
 
 export function time(iso) {
-  return iso ? new Date(iso).toLocaleTimeString() : '—';
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  const hh = String(date.getUTCHours()).padStart(2, '0');
+  const mm = String(date.getUTCMinutes()).padStart(2, '0');
+  return `${y}-${m}-${d} ${hh}:${mm}`;
 }

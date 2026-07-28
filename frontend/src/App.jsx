@@ -1,103 +1,76 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AppShell, Button, SideBrand, SideNav, StatusPill } from './design-system';
+import { AppShell, EmptyState, TopNav } from './design-system';
+import ProductConfigurationScreen from './components/ProductConfigurationScreen.jsx';
 import RequestsScreen from './components/RequestsScreen.jsx';
 import { api } from './api.js';
 
-const POLL_MS = 2000;
-const HEALTH_MS = 10000;
-
-/**
- * The screens in the side menu.
- *
- * ⚠️ One real screen and three placeholders — the placeholders are there so the menu shows you
- * where your own screens go, and they are `disabled` so nobody clicks into nothing. Replace them
- * with what your business topic actually needs; the operator UI is a graded deliverable, and a
- * single read-only list is not one.
- */
 const SCREENS = [
-  { id: 'applications', label: 'Applications' },
-  { id: 'cases', label: 'Cases', hint: 'your own table', disabled: true },
-  { id: 'overrides', label: 'Overrides', hint: 'operator actions', disabled: true },
-  { id: 'settings', label: 'Settings', hint: 'reference data', disabled: true },
+  { id: 'verification-board', label: 'Verification Board' },
+  { id: 'failure-patterns', label: 'Failure Patterns' },
+  { id: 'product-configuration', label: 'Product Configuration' },
 ];
 
-/**
- * A sidebar rather than a top bar: this app is expected to grow more screens than a row of tabs
- * holds, and the menu is where a team plans that growth. The identity box above it is the only
- * place the app says who it belongs to — its values come from `/info`, so the same image reads
- * "Team 07" once SERVICE_TEAM says so.
- */
 export default function App() {
-  const [screen, setScreen] = useState('applications');
+  const [screen, setScreen] = useState('verification-board');
   const [requests, setRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
   const [error, setError] = useState(null);
-  const [health, setHealth] = useState(null);
-  const [info, setInfo] = useState(null);
+  const [boardMore, setBoardMore] = useState(false);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (query = '') => {
+    setLoadingRequests(true);
     try {
-      setRequests(await api.listApplications());
+      const result = await api.searchCases(query, 10);
+      const rows = Array.isArray(result?.cases) ? result.cases : [];
+      setRequests(
+        rows.map((row) => ({
+          applicationId: row.applicationId,
+          fullName: row.fullName,
+          status: row.outcome,
+          createdAt: row.submittedAt,
+          reasonCount: row.reasonCount,
+          ruleResults: null,
+        }))
+      );
+      setBoardMore(Boolean(result?.more));
       setError(null);
     } catch (e) {
       setError(e.message);
+      setRequests([]);
+      setBoardMore(false);
+    } finally {
+      setLoadingRequests(false);
     }
   }, []);
 
   useEffect(() => {
-    reload();
-    const id = setInterval(reload, POLL_MS);
-    return () => clearInterval(id);
-  }, [reload]);
-
-  const refreshHealth = useCallback(async () => {
-    try {
-      const [h, i] = await Promise.all([api.health(), api.info()]);
-      setHealth(h);
-      setInfo(i);
-    } catch {
-      setHealth(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    refreshHealth();
-    const id = setInterval(refreshHealth, HEALTH_MS);
-    return () => clearInterval(id);
-  }, [refreshHealth]);
-
-  const up = !error && health?.status === 'UP';
+    if (screen !== 'verification-board') return;
+    void reload('');
+  }, [screen, reload]);
 
   return (
     <AppShell
-      side={
-        <>
-          <SideBrand
-            brand={info?.team ?? 'Team'}
-            product={info?.service ?? 'Module'}
-            meta={info ? `${info.serviceId} · ${info.domain}` : undefined}
-          />
-          <SideNav items={SCREENS} active={screen} onSelect={setScreen} />
-          {/* Health and refresh lived in the top bar; with the bar gone they belong beside the
-              menu rather than inside it — a menu item that is not a screen is a trap. */}
-          <div className="app-side-status">
-            <StatusPill tone={up ? 'positive' : 'negative'}>{up ? 'Up' : 'Down'}</StatusPill>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                reload();
-                refreshHealth();
-              }}
-            >
-              Refresh
-            </Button>
-          </div>
-        </>
-      }
-      footer="One of ten modules · applications arrive from the orchestrator, never from this UI"
+      nav={<TopNav brand="NEO" product="Verification" tabs={SCREENS} active={screen} onSelect={setScreen} />}
+      wide
     >
-      {screen === 'applications' && (
-        <RequestsScreen requests={requests} error={error} info={info} />
+      {screen === 'verification-board' && (
+        <RequestsScreen
+          requests={requests}
+          more={boardMore}
+          error={error}
+          loading={loadingRequests}
+          onLoad={reload}
+        />
+      )}
+
+      {screen === 'failure-patterns' && (
+        <EmptyState title="Failure Patterns">
+          This screen will show ranked reason codes by date window (UC04).
+        </EmptyState>
+      )}
+
+      {screen === 'product-configuration' && (
+        <ProductConfigurationScreen />
       )}
     </AppShell>
   );

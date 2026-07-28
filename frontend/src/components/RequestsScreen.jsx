@@ -1,19 +1,97 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Badge,
+  Button,
+  Caption,
+  Card,
   ChipGroup,
   DataTable,
   EmptyState,
-  Grid,
-  MetricTile,
+  KeyValue,
   PageHeader,
   SearchInput,
+  Split,
+  TextInput,
   Toolbar,
 } from '../design-system';
-import { statusTone, STATUSES, time } from '../status.js';
+import { api } from '../api.js';
+import { statusTone, time } from '../status.js';
 
-const FILTERS = ['All', ...STATUSES];
+const FILTERS = [
+  'All',
+  { value: 'PASSED', label: 'PASSED' },
+  { value: 'FAILED', label: 'FAILED' },
+  { value: 'REVIEW', label: 'REVIEW' },
+];
+
+function toDecisionLabel(status) {
+  const normalized = String(status ?? '').toUpperCase();
+  if (normalized === 'PASSED') return 'PASSED';
+  if (normalized === 'FAILED') return 'FAILED';
+  if (normalized === 'REVIEW') return 'REVIEW';
+  if (normalized === 'ACCEPTED') return 'PASSED';
+  if (normalized === 'REJECTED') return 'FAILED';
+  if (normalized === 'REFERRED') return 'REVIEW';
+  if (normalized === 'IN_PROGRESS') return 'IN_PROGRESS';
+  return normalized || 'UNKNOWN';
+}
+
+function toneForDecisionLabel(label) {
+  if (label === 'PASSED') return 'positive';
+  if (label === 'FAILED') return 'negative';
+  if (label === 'REVIEW') return 'warning';
+  if (label === 'IN_PROGRESS') return 'info';
+  return 'neutral';
+}
+
+function normalizeRuleResults(ruleResults) {
+  if (Array.isArray(ruleResults)) return ruleResults;
+  if (Array.isArray(ruleResults?.ruleResults)) return ruleResults.ruleResults;
+  return [];
+}
+
+function mapCaseDetail(payload) {
+  const ruleResults = normalizeRuleResults(payload?.ruleResults);
+  const rules = ruleResults.map((rule, index) => {
+    const reasons = Array.isArray(rule?.reasonCodes)
+      ? rule.reasonCodes.filter((item) => typeof item === 'string' && item.trim())
+      : [];
+    return {
+      title: rule?.ruleName ?? `Rule ${index + 1}`,
+      outcome: rule?.passed === true ? 'PASSED' : rule?.passed === false ? 'FAILED' : 'UNKNOWN',
+      reasons: reasons.length > 0 ? reasons : ['No reason supplied'],
+    };
+  });
+
+  return {
+    outcome: payload?.outcome ?? null,
+    reference: payload?.reference ?? null,
+    productConfigVersion: payload?.productConfigVersion ?? null,
+    rules,
+  };
+}
+
+function mapLiveApplicant(payload) {
+  const app = payload?.application ?? payload;
+  const applicant = app?.applicant ?? {};
+  const product = app?.product ?? {};
+  const consents = app?.consents ?? {};
+
+  return {
+    fullName: applicant?.fullName ?? null,
+    dateOfBirth: applicant?.dateOfBirth ?? null,
+    productCode: product?.productCode ?? null,
+    requestedLimit:
+      typeof product?.requestedCreditLimit === 'number'
+        ? `GBP ${product.requestedCreditLimit.toLocaleString('en-GB')}`
+        : null,
+    channel: app?.channel ?? null,
+    residence: applicant?.countryOfResidence ?? null,
+    termsAccepted:
+      typeof consents?.termsAccepted === 'boolean' ? String(consents.termsAccepted) : null,
+  };
+}
 
 /**
  * Everything this module has answered.
@@ -26,87 +104,315 @@ const FILTERS = ['All', ...STATUSES];
  * screen's rules, a toolbar that narrows, a capped table. The 10-row cap and its footnote come from
  * DataTable — no screen re-implements them.
  */
-export default function RequestsScreen({ requests, error, info }) {
+export default function RequestsScreen({ requests, more, error, loading, onLoad }) {
+  const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [hasAsked, setHasAsked] = useState(false);
+  const [selectedApplicationId, setSelectedApplicationId] = useState(null);
+  const [caseDetail, setCaseDetail] = useState({ status: 'idle', data: null, error: null });
+  const [liveApplicant, setLiveApplicant] = useState({ status: 'idle', data: null, error: null });
 
-  const counts = useMemo(
-    () =>
-      requests.reduce((acc, r) => {
-        acc[r.status] = (acc[r.status] ?? 0) + 1;
-        return acc;
-      }, {}),
-    [requests]
-  );
+  useEffect(() => {
+    if (requests.length > 0) {
+      setHasAsked(true);
+    }
+  }, [requests.length]);
+
+  const counts = useMemo(() => {
+    const next = { All: requests.length };
+    for (const row of requests) {
+      const outcome = toDecisionLabel(row.status);
+      next[outcome] = (next[outcome] ?? 0) + 1;
+    }
+    return next;
+  }, [requests]);
 
   const matches = useMemo(() => {
+    if (!hasAsked) return [];
+
     const needle = query.trim().toLowerCase();
     return requests.filter((r) => {
-      if (filter !== 'All' && r.status !== filter) return false;
+      if (filter !== 'All' && toDecisionLabel(r.status) !== filter) return false;
+      const createdDate = r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : null;
+      if (createdDate && fromDate && createdDate < fromDate) return false;
+      if (createdDate && toDate && createdDate > toDate) return false;
+
       if (!needle) return true;
-      return r.applicationId.toLowerCase().includes(needle);
+      const applicantName = (r.fullName ?? '').toLowerCase();
+      return r.applicationId.toLowerCase().includes(needle) || applicantName.includes(needle);
     });
-  }, [requests, query, filter]);
+  }, [requests, query, filter, fromDate, toDate, hasAsked]);
+
+  useEffect(() => {
+    if (!hasAsked) return undefined;
+
+    const hasInProgress = matches.some((row) => row.status?.toUpperCase() === 'IN_PROGRESS');
+    if (!hasInProgress) return undefined;
+
+    const id = setInterval(() => {
+      void onLoad();
+    }, 1500);
+
+    return () => clearInterval(id);
+  }, [matches, hasAsked, onLoad]);
+
+  function reasonCount(ruleResults) {
+    if (!ruleResults) return 1;
+    try {
+      const parsed = JSON.parse(ruleResults);
+      if (Array.isArray(parsed)) {
+        return parsed.reduce((sum, item) => sum + (item?.reasonCodes?.length ?? 0), 0) || 1;
+      }
+      if (parsed && Array.isArray(parsed.ruleResults)) {
+        return parsed.ruleResults.reduce((sum, item) => sum + (item?.reasonCodes?.length ?? 0), 0) || 1;
+      }
+    } catch {
+      return 1;
+    }
+    return 1;
+  }
 
   const columns = [
-    { key: 'applicationId', header: 'Application', mono: true },
+    { key: 'applicationId', header: 'Application', mono: true, width: '20%' },
+    {
+      key: 'applicant',
+      header: 'Applicant',
+      width: '22%',
+      render: (r) => r.fullName ?? '—',
+    },
+    { key: 'createdAt', header: 'Submitted', width: '22%', render: (r) => time(r.createdAt) },
     {
       key: 'status',
-      header: 'Status',
+      header: 'Outcome',
       tight: true,
-      render: (r) => <Badge tone={statusTone(r.status)}>{r.status}</Badge>,
+      width: '18%',
+      render: (r) => <Badge tone={statusTone(r.status)}>{toDecisionLabel(r.status)}</Badge>,
     },
-    { key: 'createdAt', header: 'Answered', render: (r) => time(r.createdAt) },
+    {
+      key: 'reasons',
+      header: 'Reasons',
+      tight: true,
+      numeric: true,
+      width: '10%',
+      render: (r) => (typeof r.reasonCount === 'number' ? r.reasonCount : reasonCount(r.ruleResults)),
+    },
   ];
+
+  const selectedRow = useMemo(
+    () => requests.find((row) => row.applicationId === selectedApplicationId) ?? null,
+    [requests, selectedApplicationId]
+  );
+
+  useEffect(() => {
+    if (!selectedRow) {
+      setCaseDetail({ status: 'idle', data: null, error: null });
+      setLiveApplicant({ status: 'idle', data: null, error: null });
+      return;
+    }
+
+    let cancelled = false;
+    setCaseDetail({ status: 'loading', data: null, error: null });
+    setLiveApplicant({ status: 'loading', data: null, error: null });
+
+    api
+      .getCaseDetail(selectedRow.applicationId)
+      .then((payload) => {
+        if (cancelled) return;
+        setCaseDetail({ status: 'ready', data: mapCaseDetail(payload), error: null });
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setCaseDetail({ status: 'error', data: null, error: e?.message ?? 'Unavailable' });
+      });
+
+    api
+      .getApplication(selectedRow.applicationId)
+      .then((payload) => {
+        if (cancelled) return;
+        setLiveApplicant({ status: 'ready', data: mapLiveApplicant(payload), error: null });
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setLiveApplicant({ status: 'error', data: null, error: e?.message ?? 'Unavailable' });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRow]);
+
+  if (selectedRow) {
+    const detail = caseDetail.data;
+    const applicant = selectedRow.fullName ?? 'Unknown applicant';
+    const caseOutcome = detail?.outcome
+      ? toDecisionLabel(detail.outcome)
+      : toDecisionLabel(selectedRow.status);
+
+    const liveData = liveApplicant.data;
+    const applicantItems = [
+      ['Full name', liveData?.fullName ?? applicant],
+      ['Date of birth', liveData?.dateOfBirth ?? '—'],
+      ['Product', liveData?.productCode ?? '—'],
+      ['Requested limit', liveData?.requestedLimit ?? '—'],
+      ['Channel', liveData?.channel ?? '—'],
+      ['Residence', liveData?.residence ?? '—'],
+      ['Terms accepted', liveData?.termsAccepted ?? '—'],
+    ];
+
+    return (
+      <>
+        <PageHeader
+          title={`Case ${selectedRow.applicationId}`}
+          badge={<Badge tone={statusTone(selectedRow.status)}>{caseOutcome}</Badge>}
+          meta={`${applicant} | submitted ${time(selectedRow.createdAt)} | reference ${detail?.reference ?? '—'} | ProductConfig v${detail?.productConfigVersion ?? '—'}`}
+        />
+
+        <h3 className="verification-detail-section-title">Rule results - every check, pass or fail</h3>
+
+        <Split
+          sidebar={
+            <>
+              <Card title="Applicant - live from orchestrator">
+                <KeyValue
+                  items={applicantItems}
+                  keyWidth="45%"
+                />
+              </Card>
+              {liveApplicant.status === 'loading' && (
+                <Caption>Loading applicant from orchestrator...</Caption>
+              )}
+              {liveApplicant.status === 'error' && (
+                <Caption>
+                  Orchestrator unavailable right now - applicant live data cannot be loaded.
+                </Caption>
+              )}
+              <Caption>
+                Nothing here is stored by this module - fetched on open via GET /cases/{'{id}'} and GET /applications/{'{id}'}
+              </Caption>
+            </>
+          }
+        >
+          <div className="verification-detail-rules">
+            {caseDetail.status === 'loading' && <Caption>Loading case detail...</Caption>}
+            {caseDetail.status === 'error' && (
+              <Alert tone="negative" title="Could not load case detail">
+                {caseDetail.error}
+              </Alert>
+            )}
+            {caseDetail.status === 'ready' && detail?.rules?.length === 0 && (
+              <EmptyState title="No rule results">This case has no rule results recorded.</EmptyState>
+            )}
+            {caseDetail.status === 'ready' &&
+              detail?.rules?.map((rule) => (
+                <Card
+                  key={rule.title}
+                  title={rule.title}
+                  headEnd={<Badge tone={toneForDecisionLabel(rule.outcome)}>{rule.outcome}</Badge>}
+                >
+                  {Array.isArray(rule.reasons) && rule.reasons.length > 0
+                    ? rule.reasons.join(' | ')
+                    : 'No reason supplied'}
+                </Card>
+              ))}
+          </div>
+        </Split>
+
+        <div className="verification-detail-actions">
+          <Button variant="primary">Override decision...</Button>
+          <Button variant="secondary" onClick={() => setSelectedApplicationId(null)}>
+            Back to board
+          </Button>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
       <PageHeader
-        title="Applications"
-        lede="everything the orchestrator has sent this module, and what it answered · newest first"
-        meta={
-          info
-            ? `${info.serviceId} · ${info.domain} · v${info.version}` +
-              (info.mockedDependencies?.length
-                ? ` · mocking ${info.mockedDependencies.join(', ')}`
-                : ' · nothing mocked')
-            : undefined
-        }
+        title="Verification Board"
+        lede="empty until you search · max 10 rows · names fetched live, never stored"
       />
 
-      {error && (
-        <Alert tone="negative" title="Could not load applications">
-          {error} — the backend may still be starting. The list retries every two seconds.
+      {error && requests.length === 0 && (
+        <Alert tone="negative" title="Could not load cases">
+          {error}
         </Alert>
       )}
 
-      <Grid cols={2} min={180} style={{ marginBottom: 'var(--ds-space-6)' }}>
-        <MetricTile label="Seen" value={requests.length} />
-        <MetricTile label="Accepted" value={counts.ACCEPTED ?? 0} tone="positive" />
-      </Grid>
-
       <Toolbar>
-        <SearchInput
-          grow
-          placeholder="Application id"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search applications"
-        />
-        <ChipGroup options={FILTERS} value={filter} onChange={setFilter} counts={counts} />
+        <Toolbar.Group className="verification-board-toolbar-group">
+          <SearchInput
+            placeholder="Maria"
+            value={queryInput}
+            onChange={(e) => {
+              const value = e.target.value;
+              setQueryInput(value);
+              setQuery(value);
+              setHasAsked(true);
+              void onLoad(value);
+            }}
+            aria-label="Search application id or applicant name"
+          />
+        </Toolbar.Group>
+        <Toolbar.Group className="verification-board-toolbar-group">
+          <ChipGroup
+            options={FILTERS}
+            value={filter}
+            onChange={(next) => {
+              setFilter(next);
+              setHasAsked(true);
+            }}
+            counts={counts}
+          />
+        </Toolbar.Group>
+        <Toolbar.Spacer />
+        <Toolbar.Group className="verification-board-toolbar-group">
+          <span className="verification-board-date-label">From</span>
+          <TextInput
+            type="date"
+            size="sm"
+            className="verification-board-date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            aria-label="From date"
+          />
+          <span className="verification-board-date-label">To</span>
+          <TextInput
+            type="date"
+            size="sm"
+            className="verification-board-date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            aria-label="To date"
+          />
+        </Toolbar.Group>
       </Toolbar>
 
       <DataTable
+        className="verification-board-results"
         columns={columns}
         rows={matches}
-        total={matches.length}
+        total={matches.length + (more ? 1 : 0)}
         rowKey={(r) => r.applicationId}
+        onRowClick={(row) => setSelectedApplicationId(row.applicationId)}
         footnote="newest first"
         empty={
           <EmptyState
-            title={requests.length === 0 ? 'Nothing received yet' : 'No application matches that'}
+            title={
+              !hasAsked
+                ? 'Search for an applicant to begin'
+                : requests.length === 0
+                  ? 'Nothing received yet'
+                  : 'No application matches that'
+            }
           >
-            {requests.length === 0 ? (
+            {!hasAsked ? (
+              <>Boards start empty on purpose — nothing is fetched until you ask.</>
+            ) : requests.length === 0 ? (
               <>
                 Send one from the <strong>sidecar</strong> at <strong>localhost:9000</strong>, or turn
                 the generator on in the orchestrator UI. Nothing in this screen sends applications —

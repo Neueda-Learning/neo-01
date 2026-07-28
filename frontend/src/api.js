@@ -5,7 +5,12 @@
 // app is served under a path prefix (/neo-01) and VITE_API_BASE is how every URL
 // picks it up. A raw fetch('/api/...') inside a component works on your laptop and 404s
 // on the load balancer.
-const BASE = import.meta.env.VITE_API_BASE || '';
+const LOCAL_BACKEND =
+  typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+    ? `${window.location.protocol}//${window.location.hostname}:8080`
+    : '';
+
+const BASE = import.meta.env.VITE_API_BASE || LOCAL_BACKEND || '';
 
 async function request(path, options = {}) {
   const res = await fetch(BASE + path, {
@@ -36,4 +41,14 @@ export const api = {
   info: () => request('/info'),
   listApplications: () => request('/api/v1/applications'),
   getApplication: (id) => request(`/api/v1/applications/${id}`),
+  getCaseDetail: (applicationId) => request(`/cases/${applicationId}`),
+  searchCases: (q = '', limit = 10) => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (limit != null) params.set('limit', String(limit));
+    const query = params.toString();
+    return request(`/cases${query ? `?${query}` : ''}`);
+  },
+  listProductCodes: () => request('/products'),
+  getProductVersions: (code) => request(`/products/${code}/versions`),
 };

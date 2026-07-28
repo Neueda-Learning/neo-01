@@ -1,21 +1,105 @@
-/* App-specific rules only. Everything visual — colour, type, spacing, radii — comes
- * from the design system's custom properties; this file adds no new values, only
- * the layouts the system has no component for.
- *
- * If something here grows into a pattern three screens need, it belongs in the
- * design system (DESIGN.md § "When the system does not have what you need") — which
- * is exactly how SideNav and SideBrand got there.
- *
- * It used to hold rules for a scenario picker and an expandable row detail. Both
- * components are gone (the picker moved to the sidecar, the detail went with the
- * placeholder table's three columns), so their rules went with them: CSS for a
- * component that no longer exists is the hardest kind of dead code to notice. */
-
-/* Health and refresh, under the side menu. Not menu items — a row in a menu that is
- * not a screen is a trap — and not a top bar either, because there is no longer one. */
-.app-side-status {
+/* App-specific layout for the UC00 board composition. */
+.verification-board-toolbar-group {
   display: flex;
   align-items: center;
   gap: var(--ds-space-3);
-  padding: 0 var(--ds-space-2);
+}
+
+.verification-board-toolbar-group .ds-input,
+.verification-board-toolbar-group .ds-search {
+  min-width: 170px;
+}
+
+.verification-board-date {
+  min-width: 140px;
+}
+
+.verification-board-date-label {
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+}
+
+.verification-board-results {
+  width: min(1500px, 100%);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.verification-detail-section-title {
+  margin: var(--ds-space-7) 0 var(--ds-space-4);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-xl);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.verification-detail-rules {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+
+.verification-detail-actions {
+  display: flex;
+  gap: var(--ds-space-3);
+  margin-top: var(--ds-space-5);
+}
+
+.product-config-main {
+  display: grid;
+  gap: var(--ds-space-5);
+}
+
+.product-config-table {
+  width: 100%;
+}
+
+.product-config-actions {
+  display: flex;
+}
+
+.product-config-history {
+  display: grid;
+  gap: var(--ds-space-6);
+}
+
+.product-config-history__row {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: var(--ds-space-3) var(--ds-space-5);
+  align-items: start;
+}
+
+.product-config-history__meta,
+.product-config-history__channels {
+  color: var(--ds-color-text-muted);
+}
+
+.product-config-history__summary,
+.product-config-history__channels {
+  font-size: var(--ds-text-lg);
+}
+
+.product-config-history__channels {
+  grid-column: 2;
+}
+
+@media (max-width: 900px) {
+  .verification-board-toolbar-group .ds-input,
+  .verification-board-toolbar-group .ds-search,
+  .verification-board-date {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .verification-detail-actions {
+    flex-direction: column;
+  }
+
+  .product-config-history__row {
+    grid-template-columns: 1fr;
+  }
+
+  .product-config-history__channels {
+    grid-column: auto;
+  }
 }
