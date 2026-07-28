@@ -142,13 +142,8 @@ class ApplicationServiceTest {
     void theBoardShowsWhatWasStored() {
         when(verificationRecords.findAllByOrderByCreatedAtDesc())
                 .thenReturn(java.util.List.of(new VerificationRecord(
-<<<<<<< HEAD
-                        "SIM-01", Decision.ACCEPTED, "VER_ALL_CHECKS_PASSED",
-                        null, null)));
-=======
                         "SIM-01", Decision.ACCEPTED, "hello world from processApplication",
                         null, null, "Maria Nowak")));
->>>>>>> 6a61e7e111715a6c9b774dca44f9467240b1109c
 
         assertThat(service.findAll())
                 .singleElement()
@@ -166,7 +161,7 @@ class ApplicationServiceTest {
                 Decision.ACCEPTED,
                 "decision complete",
                 42L,
-                "[{\"ruleName\":\"age\",\"passed\":true,\"reasonCodes\":[\"VER_ALL_CHECKS_PASSED\"]}]");
+                "[{\"ruleName\":\"age\",\"passed\":true,\"reasonCodes\":[\"VER_ALL_CHECKS_PASSED\"]}]", null);
         when(verificationRecords.findById("SIM-CASE-1")).thenReturn(Optional.of(row));
         when(productConfigs.findById(42L)).thenReturn(Optional.of(new ProductConfig(
                 "CREDIT_CARD_REWARDS", 3, 18, 500, 15000, true, "WEB,MOBILE_APP", Instant.now())));

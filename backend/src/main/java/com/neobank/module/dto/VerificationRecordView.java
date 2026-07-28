@@ -5,7 +5,7 @@ import java.time.Instant;
 
 /**
  * What {@code GET /api/v1/applications} returns — the operator's view of each decision.
- *
+uton *
  * <p>Contains only the fields that belong to this module's own data.</p>
  */
 public record VerificationRecordView(
