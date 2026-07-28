@@ -41,6 +41,7 @@ export const api = {
   info: () => request('/info'),
   listApplications: () => request('/api/v1/applications'),
   getApplication: (id) => request(`/api/v1/applications/${id}`),
+  getCaseDetail: (applicationId) => request(`/cases/${applicationId}`),
   searchCases: (q = '', limit = 10) => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
