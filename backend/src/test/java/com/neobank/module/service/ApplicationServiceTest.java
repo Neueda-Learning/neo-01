@@ -65,6 +65,7 @@ class ApplicationServiceTest {
         assertThat(saved.getAllValues().get(0).getOutcome()).isEqualTo("IN_PROGRESS");
         assertThat(saved.getAllValues().get(1).getOutcome()).isEqualTo("ACCEPTED");
         assertThat(saved.getAllValues().get(0).getApplicationId()).isEqualTo("SIM-01");
+        assertThat(saved.getAllValues().get(0).getFullName()).isEqualTo("Maria Nowak");
 
         verify(orchestrator).applicationStatusUpdate("SIM-01", Decision.ACCEPTED,
                 "hello world from processApplication");
@@ -74,7 +75,7 @@ class ApplicationServiceTest {
     @Test
     void idempotentForDuplicateInProgressApplication() {
         when(verificationRecords.findById("SIM-DUP")).thenReturn(Optional.of(
-                new VerificationRecord("SIM-DUP", Decision.IN_PROGRESS, "pending", null, null)));
+                new VerificationRecord("SIM-DUP", Decision.IN_PROGRESS, "pending", null, null, "Maria Nowak")));
 
         service.processApplicationAsync(request("SIM-DUP"));
 
@@ -86,7 +87,7 @@ class ApplicationServiceTest {
     @Test
     void replaysCallbackForAlreadyDecidedApplication() {
         when(verificationRecords.findById("SIM-DEC")).thenReturn(Optional.of(
-                new VerificationRecord("SIM-DEC", Decision.ACCEPTED, "previous decision", null, null)));
+                new VerificationRecord("SIM-DEC", Decision.ACCEPTED, "previous decision", null, null, "Maria Nowak")));
 
         service.processApplicationAsync(request("SIM-DEC"));
 
@@ -116,13 +117,14 @@ class ApplicationServiceTest {
         when(verificationRecords.findAllByOrderByCreatedAtDesc())
                 .thenReturn(java.util.List.of(new VerificationRecord(
                         "SIM-01", Decision.ACCEPTED, "hello world from processApplication",
-                        null, null)));
+                        null, null, "Maria Nowak")));
 
         assertThat(service.findAll())
                 .singleElement()
                 .satisfies(view -> {
                     assertThat(view.applicationId()).isEqualTo("SIM-01");
                     assertThat(view.outcome()).isEqualTo("ACCEPTED");
+                    assertThat(view.fullName()).isEqualTo("Maria Nowak");
                 });
     }
 }

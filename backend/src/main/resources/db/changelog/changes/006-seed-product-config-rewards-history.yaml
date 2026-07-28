@@ -1,7 +1,7 @@
 databaseChangeLog:
 
   - changeSet:
-      id: 005-seed-product-config-rewards-v2
+      id: 006-seed-product-config-rewards-v2
       author: neo-01
       comment: Seed version 2 for CREDIT_CARD_REWARDS
       changes:
@@ -18,7 +18,7 @@ databaseChangeLog:
               - column: { name: effective_from, value: '2026-07-02 00:00:00' }
 
   - changeSet:
-      id: 005-seed-product-config-rewards-v3
+      id: 006-seed-product-config-rewards-v3
       author: neo-01
       comment: Seed version 3 for CREDIT_CARD_REWARDS
       changes:
@@ -35,7 +35,7 @@ databaseChangeLog:
               - column: { name: effective_from, value: '2026-07-03 00:00:00' }
 
   - changeSet:
-      id: 005-seed-product-config-rewards-v4
+      id: 006-seed-product-config-rewards-v4
       author: neo-01
       comment: Seed version 4 for CREDIT_CARD_REWARDS
       changes:
