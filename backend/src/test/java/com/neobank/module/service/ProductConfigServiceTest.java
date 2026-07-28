@@ -8,6 +8,7 @@ import com.neobank.module.dto.ProductVersionCreated;
 import com.neobank.module.dto.ProductVersionView;
 import com.neobank.module.model.ProductConfig;
 import com.neobank.module.repository.ProductConfigRepository;
+import com.neobank.module.repository.VerificationRecordRepository;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,8 +29,12 @@ class ProductConfigServiceTest {
     @Autowired
     private ProductConfigRepository repository;
 
+    @Autowired
+    private VerificationRecordRepository verificationRecordRepository;
+
     @BeforeEach
     void setUp() {
+        verificationRecordRepository.deleteAll();
         repository.deleteAll();
     }
 

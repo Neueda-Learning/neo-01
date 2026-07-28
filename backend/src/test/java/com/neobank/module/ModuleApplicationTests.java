@@ -14,31 +14,45 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Boots the whole module against in-memory H2 (Liquibase applies the schema, JPA validates the
- * entities against it) and drives the real HTTP surface. No Docker or MySQL needed for
+ * Boots the whole module against in-memory H2 (Liquibase applies the schema,
+ * JPA validates the
+ * entities against it) and drives the real HTTP surface. No Docker or MySQL
+ * needed for
  * {@code mvn test}.
  *
- * <p>The work runs on the <em>test</em> thread here (see {@link SameThreadExecutor}), so by the time
- * a {@code POST} returns the row has already been written and the whole receive → work → report loop
- * is observable without sleeping or polling. The real pool is exercised for real by
- * {@code docker compose up}.</p>
+ * <p>
+ * The work runs on the <em>test</em> thread here (see
+ * {@link SameThreadExecutor}), so by the time
+ * a {@code POST} returns the row has already been written and the whole receive
+ * → work → report loop
+ * is observable without sleeping or polling. The real pool is exercised for
+ * real by
+ * {@code docker compose up}.
+ * </p>
  *
- * <p>The status update goes to {@code http://localhost:9} — a dead port, set in
- * {@code application-test.yml} — so nothing escapes the JVM and the client's swallow-and-log
- * behaviour is exercised on every test.</p>
+ * <p>
+ * The status update goes to {@code http://localhost:9} — a dead port, set in
+ * {@code application-test.yml} — so nothing escapes the JVM and the client's
+ * swallow-and-log
+ * behaviour is exercised on every test.
+ * </p>
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class ModuleApplicationTests {
 
     /**
-     * Swaps Boot's thread pool for one that runs the task inline. Async code is only hard to test
-     * when you let it stay async — replacing the executor is cheaper and far more reliable than
+     * Swaps Boot's thread pool for one that runs the task inline. Async code is
+     * only hard to test
+     * when you let it stay async — replacing the executor is cheaper and far more
+     * reliable than
      * sleeping and hoping.
      */
     @TestConfiguration
@@ -59,8 +73,14 @@ class ModuleApplicationTests {
                 "applicationId": "%s",
                 "channel": "MOBILE_APP",
                 "submittedAt": "2026-07-25T09:14:00Z",
-                "applicant": {"fullName": "Maria Nowak", "dateOfBirth": "1996-04-11"},
-                "product": {"productCode": "CREDIT_CARD_REWARDS", "requestedCreditLimit": 3000}
+                                                                "applicant": {
+                                                                        "fullName": "Maria Nowak",
+                                                                        "dateOfBirth": "1996-04-11",
+                                                                        "email": "maria.nowak@example.com",
+                                                                        "mobile": "+447700900111"
+                                                                },
+                                                                                                                                "product": {"productCode": "%s", "requestedCreditLimit": 3000},
+                                "consents": {"termsAccepted": true}
               }
             }
             """;
@@ -68,13 +88,14 @@ class ModuleApplicationTests {
     @Autowired
     private MockMvc mvc;
 
-    private static String application(String id) {
-        return APPLICATION.formatted(id, id);
+        private static String application(String id, String productCode) {
+                return APPLICATION.formatted(id, id, productCode);
     }
 
     @Test
     void contextLoads() {
-        // Reaching here means Liquibase created demo_showcase and ddl-auto=validate accepted it.
+        // Reaching here means Liquibase created demo_showcase and ddl-auto=validate
+        // accepted it.
     }
 
     @Test
@@ -92,8 +113,10 @@ class ModuleApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.serviceId").value("neo01"))
                 .andExpect(jsonPath("$.domain").value("verification"))
-                // The UI's identity box reads team + service. A team that never sets SERVICE_TEAM
-                // ships a screen claiming to be team 01's, so the field has to actually be served.
+                // The UI's identity box reads team + service. A team that never sets
+                // SERVICE_TEAM
+                // ships a screen claiming to be team 01's, so the field has to actually be
+                // served.
                 .andExpect(jsonPath("$.team").value("Team 01"))
                 .andExpect(jsonPath("$.mockedDependencies", hasSize(2)))
                 .andExpect(jsonPath("$.mockedDependencies[0]").value("id-verification-provider"));
@@ -101,16 +124,31 @@ class ModuleApplicationTests {
 
     @Test
     void anApplicationIsAcknowledgedProcessedAndReadableBack() throws Exception {
+        mvc.perform(post("/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "productCode": "IT_PRODUCT_ACCEPT",
+                          "minAge": 18,
+                          "limitMin": 500,
+                          "limitMax": 10000,
+                          "active": true,
+                          "channels": ["WEB", "MOBILE_APP", "BRANCH"]
+                        }
+                        """))
+                .andExpect(status().isCreated());
+
         mvc.perform(post("/api/v1/applications")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(application("IT-ONE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(application("IT-ONE", "IT_PRODUCT_ACCEPT")))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.status").value("in-progress"))
                 .andExpect(jsonPath("$.applicationId").value("IT-ONE"))
                 .andExpect(jsonPath("$.serviceId").value("neo01"))
                 .andExpect(jsonPath("$.command").value("process-application"));
 
-        // The row the placeholder writes. Filtered by id, not counted: H2 is shared across the
+        // The row the placeholder writes. Filtered by id, not counted: H2 is shared
+        // across the
         // tests in this context, so a size assertion would depend on execution order.
         mvc.perform(get("/api/v1/applications"))
                 .andExpect(status().isOk())
@@ -122,13 +160,14 @@ class ModuleApplicationTests {
 
     @Test
     void anApplicationWithoutAnIdIsRejected() throws Exception {
-        // The one field worth validating: a decision this module cannot report is not worth making.
+        // The one field worth validating: a decision this module cannot report is not
+        // worth making.
         mvc.perform(post("/api/v1/applications")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"correlationId":"c-1","command":"process-application",
-                                 "application":{"channel":"WEB"}}
-                                """))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"correlationId":"c-1","command":"process-application",
+                         "application":{"channel":"WEB"}}
+                        """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
                         org.hamcrest.Matchers.containsString("applicationId")));
@@ -136,7 +175,63 @@ class ModuleApplicationTests {
 
     @Test
     void productVersionHistoryIsReturnedOldestFirstWithCurrentFlag() throws Exception {
-        mvc.perform(get("/products/CREDIT_CARD_REWARDS/versions"))
+        mvc.perform(post("/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "productCode": "IT_PRODUCT_HISTORY",
+                          "minAge": 18,
+                          "limitMin": 1000,
+                          "limitMax": 10000,
+                          "active": true,
+                          "channels": ["WEB", "MOBILE_APP", "BRANCH"]
+                        }
+                        """))
+                .andExpect(status().isCreated());
+
+        mvc.perform(post("/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "productCode": "IT_PRODUCT_HISTORY",
+                          "minAge": 18,
+                          "limitMin": 1200,
+                          "limitMax": 11000,
+                          "active": true,
+                          "channels": ["WEB", "MOBILE_APP", "BRANCH"]
+                        }
+                        """))
+                .andExpect(status().isCreated());
+
+        mvc.perform(post("/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "productCode": "IT_PRODUCT_HISTORY",
+                          "minAge": 19,
+                          "limitMin": 1500,
+                          "limitMax": 12000,
+                          "active": true,
+                          "channels": ["WEB", "MOBILE_APP", "BRANCH", "PHONE"]
+                        }
+                        """))
+                .andExpect(status().isCreated());
+
+        mvc.perform(post("/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "productCode": "IT_PRODUCT_HISTORY",
+                          "minAge": 20,
+                          "limitMin": 2000,
+                          "limitMax": 15000,
+                          "active": false,
+                          "channels": ["WEB", "BRANCH"]
+                        }
+                        """))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/products/IT_PRODUCT_HISTORY/versions"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].version").value(1))
                 .andExpect(jsonPath("$[1].version").value(2))
@@ -154,8 +249,8 @@ class ModuleApplicationTests {
     void malformedJsonIsA400WithSomethingToRead() throws Exception {
         // You will meet this: the sidecar lets you edit the envelope before sending it.
         mvc.perform(post("/api/v1/applications")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"applicationId\":\"X\",,}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"applicationId\":\"X\",,}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
                         org.hamcrest.Matchers.containsString("malformed request body")));
