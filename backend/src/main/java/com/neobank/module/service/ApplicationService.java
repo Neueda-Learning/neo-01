@@ -17,7 +17,6 @@ import com.neobank.module.repository.VerificationRecordRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Period;
-import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -27,6 +26,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,15 +38,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <ol>
  * <li>{@link #processApplicationAsync} is called on the request thread.</li>
  * <li>{@link #acceptRequest} inserts an {@code IN_PROGRESS} row
- * <b>synchronously and
- * durably</b> before this method returns — so the 202 is never sent before the
- * row
- * exists (AC-2).</li>
- * <li>If the applicationId already has a row the request is acknowledged but
- * not
+ * <b>synchronously and durably</b> before this method returns — so the 202 is never sent before
+ * the row exists (AC-2).</li>
+ * <li>If the applicationId already has a row the request is acknowledged but not
  * re-processed (AC-4 idempotency).</li>
- * <li>The async decision worker {@link #processApplication} starts only after
- * the row
+ * <li>The async decision worker {@link #processApplication} starts only after the row
  * is committed (AC-6).</li>
  * </ol>
  */
@@ -60,27 +56,30 @@ public class ApplicationService {
     private static final String RULE_PRODUCT_ACTIVE = "productActive";
     private static final String RULE_CHANNEL = "channel";
     private static final String RULE_EMPLOYMENT_STATUS = "employmentStatus";
-    private static final Set<String> SUPPORTED_TAX_RESIDENCIES = Set.of("GB");
-    private static final Set<String> HIGH_RISK_COUNTRIES = Set.of("IR");
-    private static final Set<String> EXACT_NAME_BLOCKLIST = Set.of("VIKTOR PETROV");
-    private static final int MIN_PARTIAL_NAME_PREFIX = 5;
-    private static final int MIN_ANNUAL_INCOME = 20000;
-    private static final String PRODUCT_CODE_STUDENT = "CREDIT_CARD_STUDENT";
-    private static final double DTI_REJECT_THRESHOLD = 0.45;
 
     private final Executor executor;
     private final VerificationRecordRepository verificationRecords;
     private final ProductConfigRepository productConfigs;
     private final OrchestratorClient orchestrator;
+    private final Clock clock;
 
+    @Autowired
     public ApplicationService(@Qualifier("applicationTaskExecutor") Executor executor,
             VerificationRecordRepository verificationRecords,
             ProductConfigRepository productConfigs,
             OrchestratorClient orchestrator) {
+        this(executor, verificationRecords, productConfigs, orchestrator, Clock.systemUTC());
+    }
+
+    ApplicationService(Executor executor,
+            VerificationRecordRepository verificationRecords,
+            ProductConfigRepository productConfigs,
+            OrchestratorClient orchestrator, Clock clock) {
         this.executor = executor;
         this.verificationRecords = verificationRecords;
         this.productConfigs = productConfigs;
         this.orchestrator = orchestrator;
+        this.clock = clock;
     }
 
     /**
@@ -111,8 +110,7 @@ public class ApplicationService {
      * <li>Existing row still IN_PROGRESS — returns {@code false} (worker is already
      * running).</li>
      * <li>Existing row already decided — replays the stored callback async and
-     * returns
-     * {@code false} (no re-processing, AC-4).</li>
+     * returns {@code false} (no re-processing, AC-4).</li>
      * </ul>
      */
     boolean acceptRequest(ApplicationRequest request) {
@@ -146,14 +144,12 @@ public class ApplicationService {
 
     /**
      * The async decision worker — runs off the request thread after the IN_PROGRESS
-     * row
-     * is committed.
+     * row is committed.
      *
      * <p>
      * Package-private so unit tests can call it directly on the test thread without
      * a thread pool. Always reports back to the orchestrator, even on failure, so
-     * the
-     * journey never silently times out.
+     * the journey never silently times out.
      * </p>
      */
     void processApplication(ApplicationRequest request) {
@@ -168,7 +164,7 @@ public class ApplicationService {
                     result.decision(),
                     result.reference(),
                     result.productConfigId(),
-                    result.ruleResultsJson(), 
+                    result.ruleResultsJson(),
                     fullName));
             orchestrator.applicationStatusUpdate(applicationId, result.decision(), result.reference());
         } catch (RuntimeException e) {
@@ -245,18 +241,22 @@ public class ApplicationService {
         ProductConfig config = findCurrentConfig(app);
         Long productConfigId = config == null ? null : config.getId();
 
-        List<String> wellFormedReasons = evaluateWellFormedness(app, config);
+        List<String> wellFormedReasons = new java.util.ArrayList<>(evaluateWellFormedness(app, config));
+
+        AgeEvaluation ageEvaluation = evaluateAge(app, config);
+
+        LimitEvaluation limitEvaluation = evaluateRequestedLimit(app, config);
+        wellFormedReasons.addAll(limitEvaluation.reasons());
+
         ruleResults.add(ruleNode(RULE_WELL_FORMEDNESS, wellFormedReasons.isEmpty(),
                 reasonsOrAllPassed(wellFormedReasons)));
 
         boolean hardFailure = !wellFormedReasons.isEmpty();
-        boolean reviewFlag = false;
 
-        AgeEvaluation ageEvaluation = evaluateAge(app, config);
-        ruleResults.add(ruleNode(RULE_AGE, !ageEvaluation.hardFailure(),
+        ruleResults.add(ruleNode(RULE_AGE, !ageEvaluation.hardFailure() && ageEvaluation.reasons().stream()
+                        .noneMatch(r -> r.startsWith("VER_AGE_")),
                 reasonsOrAllPassed(ageEvaluation.reasons())));
         hardFailure = hardFailure || ageEvaluation.hardFailure();
-        reviewFlag = reviewFlag || ageEvaluation.reviewFlag();
 
         List<String> activeReasons = evaluateProductActive(config);
         ruleResults.add(ruleNode(RULE_PRODUCT_ACTIVE, activeReasons.isEmpty(),
@@ -273,84 +273,11 @@ public class ApplicationService {
                 reasonsOrAllPassed(employmentStatusReasons)));
         hardFailure = hardFailure || !employmentStatusReasons.isEmpty();
 
-        HighRiskEvaluation highRiskEvaluation = evaluateHighRiskCountry(app);
-        reviewFlag = reviewFlag || highRiskEvaluation.reviewFlag();
-        if (!highRiskEvaluation.reasons().isEmpty()) {
-            JsonNode wellFormednessRule = ruleResults.get(0);
-            ArrayNode reasonCodes = (ArrayNode) wellFormednessRule.get("reasonCodes");
-            if (reasonCodes.size() == 1 && "VER_ALL_CHECKS_PASSED".equals(reasonCodes.get(0).asText())) {
-                reasonCodes.removeAll();
-            }
-            for (String reason : highRiskEvaluation.reasons()) {
-                reasonCodes.add(reason);
-            }
-            ((ObjectNode) wellFormednessRule).put("passed", false);
-        }
-
-        NameEvaluation nameEvaluation = evaluateNameMatch(app);
-        hardFailure = hardFailure || nameEvaluation.hardFailure();
-        reviewFlag = reviewFlag || nameEvaluation.reviewFlag();
-        if (!nameEvaluation.reasons().isEmpty()) {
-            JsonNode wellFormednessRule = ruleResults.get(0);
-            ArrayNode reasonCodes = (ArrayNode) wellFormednessRule.get("reasonCodes");
-            if (reasonCodes.size() == 1 && "VER_ALL_CHECKS_PASSED".equals(reasonCodes.get(0).asText())) {
-                reasonCodes.removeAll();
-            }
-            for (String reason : nameEvaluation.reasons()) {
-                reasonCodes.add(reason);
-            }
-            ((ObjectNode) wellFormednessRule).put("passed", false);
-        }
-
-        LimitEvaluation limitEvaluation = evaluateRequestedLimit(app, config);
-        hardFailure = hardFailure || limitEvaluation.hardFailure();
-        reviewFlag = reviewFlag || limitEvaluation.reviewFlag();
-        if (!limitEvaluation.reasons().isEmpty()) {
-            // Limit checks are part of the sweep (well-formedness) section in the UC02
-            // response.
-            JsonNode wellFormednessRule = ruleResults.get(0);
-            ArrayNode reasonCodes = (ArrayNode) wellFormednessRule.get("reasonCodes");
-            if (reasonCodes.size() == 1 && "VER_ALL_CHECKS_PASSED".equals(reasonCodes.get(0).asText())) {
-                reasonCodes.removeAll();
-            }
-            for (String reason : limitEvaluation.reasons()) {
-                reasonCodes.add(reason);
-            }
-            ((ObjectNode) wellFormednessRule).put("passed", false);
-        }
-
-        AffordabilityEvaluation affordabilityEvaluation = evaluateAffordability(app);
-        hardFailure = hardFailure || affordabilityEvaluation.hardFailure();
-        reviewFlag = reviewFlag || affordabilityEvaluation.reviewFlag();
-        if (!affordabilityEvaluation.reasons().isEmpty()) {
-            JsonNode wellFormednessRule = ruleResults.get(0);
-            ArrayNode reasonCodes = (ArrayNode) wellFormednessRule.get("reasonCodes");
-            if (reasonCodes.size() == 1 && "VER_ALL_CHECKS_PASSED".equals(reasonCodes.get(0).asText())) {
-                reasonCodes.removeAll();
-            }
-            for (String reason : affordabilityEvaluation.reasons()) {
-                reasonCodes.add(reason);
-            }
-            ((ObjectNode) wellFormednessRule).put("passed", false);
-        }
-
-        DeliveryEvaluation deliveryEvaluation = evaluateDelivery(app);
-        hardFailure = hardFailure || deliveryEvaluation.hardFailure();
-        reviewFlag = reviewFlag || deliveryEvaluation.reviewFlag();
-        if (!deliveryEvaluation.reasons().isEmpty()) {
-            JsonNode wellFormednessRule = ruleResults.get(0);
-            ArrayNode reasonCodes = (ArrayNode) wellFormednessRule.get("reasonCodes");
-            if (reasonCodes.size() == 1 && "VER_ALL_CHECKS_PASSED".equals(reasonCodes.get(0).asText())) {
-                reasonCodes.removeAll();
-            }
-            for (String reason : deliveryEvaluation.reasons()) {
-                reasonCodes.add(reason);
-            }
-            ((ObjectNode) wellFormednessRule).put("passed", false);
-        }
+        // UC-02 AC-5: REVIEW (boundary) outranks a simultaneous hard failure.
+        boolean boundaryReview = ageEvaluation.review() || limitEvaluation.review();
 
         Decision decision;
-        if (reviewFlag) {
+        if (boundaryReview) {
             decision = Decision.REVIEW;
         } else if (hardFailure) {
             decision = Decision.FAILED;
@@ -394,22 +321,29 @@ public class ApplicationService {
             }
             if (!hasText(app.applicant().email())) {
                 reasons.add("VER_MISSING_FIELD:applicant.email");
+            } else if (!isValidEmail(app.applicant().email())) {
+                reasons.add("VER_INVALID_FIELD:applicant.email");
             }
             if (!hasText(app.applicant().mobile())) {
                 reasons.add("VER_MISSING_FIELD:applicant.mobile");
+            } else if (!isValidMobile(app.applicant().mobile())) {
+                reasons.add("VER_INVALID_FIELD:applicant.mobile");
             }
-            if (app.applicant().currentAddress() != null
-                    && !hasText(app.applicant().currentAddress().postcode())) {
-                reasons.add("VER_MISSING_FIELD:applicant.currentAddress.postcode");
+            if (hasText(app.applicant().nationality()) && !isIsoAlpha2(app.applicant().nationality())) {
+                reasons.add("VER_INVALID_FIELD:applicant.nationality");
             }
-            if (app.applicant().taxResidencies() != null
-                    && app.applicant().taxResidencies().stream()
-                            .filter(this::hasText)
-                            .map(String::toUpperCase)
-                            .anyMatch(code -> !SUPPORTED_TAX_RESIDENCIES.contains(code))) {
-                reasons.add("VER_TAX_RESIDENCY_NOT_SUPPORTED");
+            if (hasText(app.applicant().countryOfResidence()) && !isIsoAlpha2(app.applicant().countryOfResidence())) {
+                reasons.add("VER_INVALID_FIELD:applicant.countryOfResidence");
             }
-
+            if (app.applicant().currentAddress() != null) {
+                if (!hasText(app.applicant().currentAddress().postcode())) {
+                    reasons.add("VER_MISSING_FIELD:applicant.currentAddress.postcode");
+                }
+                if (hasText(app.applicant().currentAddress().country())
+                        && !isIsoAlpha2(app.applicant().currentAddress().country())) {
+                    reasons.add("VER_INVALID_FIELD:applicant.currentAddress.country");
+                }
+            }
         }
 
         if (app.employment() != null && !hasText(app.employment().employerName())) {
@@ -421,6 +355,8 @@ public class ApplicationService {
         } else {
             if (!hasText(app.product().productCode())) {
                 reasons.add("VER_MISSING_FIELD:product.productCode");
+            } else if (config == null) {
+                reasons.add("VER_INVALID_FIELD:product.productCode");
             }
             if (app.product().requestedCreditLimit() == null) {
                 reasons.add("VER_MISSING_FIELD:product.requestedCreditLimit");
@@ -439,16 +375,13 @@ public class ApplicationService {
             }
             if (!hasText(app.identityDocument().issuingCountry())) {
                 reasons.add("VER_MISSING_FIELD:identityDocument.issuingCountry");
+            } else if (!isIsoAlpha2(app.identityDocument().issuingCountry())) {
+                reasons.add("VER_INVALID_FIELD:identityDocument.issuingCountry");
             }
             if (!hasText(app.identityDocument().expiryDate())) {
                 reasons.add("VER_MISSING_FIELD:identityDocument.expiryDate");
             } else if (!isIsoDate(app.identityDocument().expiryDate())) {
                 reasons.add("VER_INVALID_FIELD:identityDocument.expiryDate");
-            } else {
-                LocalDate expiryDate = LocalDate.parse(app.identityDocument().expiryDate());
-                if (expiryDate.isBefore(LocalDate.now(Clock.systemUTC()))) {
-                    reasons.add("VER_ID_DOCUMENT_EXPIRED");
-                }
             }
         }
 
@@ -464,184 +397,50 @@ public class ApplicationService {
         Integer max = config.getLimitMax();
 
         if (min != null && requestedLimit < min) {
-            return new LimitEvaluation(true, false, List.of("VER_LIMIT_BELOW_MINIMUM"));
+            return new LimitEvaluation(true, false, List.of("VER_LIMIT_OUTSIDE_PRODUCT_RANGE"));
         }
         if (max != null && requestedLimit > max) {
-            return new LimitEvaluation(true, false, List.of("VER_LIMIT_ABOVE_MAXIMUM"));
+            return new LimitEvaluation(true, false, List.of("VER_LIMIT_OUTSIDE_PRODUCT_RANGE"));
+        }
+        // UC-00 ProductConfig: exactly at limitMax → REVIEW boundary
+        if (max != null && requestedLimit.equals(max)) {
+            return new LimitEvaluation(false, true, List.of("VER_LIMIT_EXACT_MAXIMUM"));
         }
         return new LimitEvaluation(false, false, List.of());
     }
 
-    private NameEvaluation evaluateNameMatch(Application app) {
-        if (app == null || app.applicant() == null || !hasText(app.applicant().fullName())) {
-            return new NameEvaluation(false, false, List.of());
-        }
-
-        String normalizedCandidate = normalizeName(app.applicant().fullName());
-        if (EXACT_NAME_BLOCKLIST.contains(normalizedCandidate)) {
-            return new NameEvaluation(true, false, List.of("VER_NAME_EXACT_MATCH"));
-        }
-
-        for (String blocked : EXACT_NAME_BLOCKLIST) {
-            if (isPartialNameMatch(normalizedCandidate, blocked)) {
-                return new NameEvaluation(false, true, List.of("VER_NAME_PARTIAL_MATCH"));
-            }
-        }
-        return new NameEvaluation(false, false, List.of());
-    }
-
-    private AffordabilityEvaluation evaluateAffordability(Application app) {
-        if (app == null || app.finances() == null) {
-            return new AffordabilityEvaluation(false, false, List.of());
-        }
-        Integer annualIncome = app.finances().annualIncome();
-        Integer monthlyHousingCost = app.finances().monthlyHousingCost();
-        Integer existingCreditCommitments = app.finances().existingCreditCommitments();
-        if (annualIncome == null || monthlyHousingCost == null || existingCreditCommitments == null
-                || annualIncome <= 0) {
-            return new AffordabilityEvaluation(false, false, List.of());
-        }
-
-        String productCode = app.product() == null ? null : app.product().productCode();
-        int minAnnualIncome = minimumIncomeForProduct(productCode);
-        if (annualIncome < minAnnualIncome) {
-            return new AffordabilityEvaluation(true, false, List.of("VER_INCOME_BELOW_MINIMUM"));
-        }
-
-        double monthlyIncome = annualIncome / 12.0;
-        double dti = (monthlyHousingCost + existingCreditCommitments) / monthlyIncome;
-        if (dti >= DTI_REJECT_THRESHOLD) {
-            return new AffordabilityEvaluation(true, false, List.of("VER_AFFORDABILITY_DTI_TOO_HIGH"));
-        }
-        return new AffordabilityEvaluation(false, false, List.of());
-    }
-
-    private int minimumIncomeForProduct(String productCode) {
-        if (PRODUCT_CODE_STUDENT.equals(productCode)) {
-            return 0;
-        }
-        return MIN_ANNUAL_INCOME;
-    }
-
-    private DeliveryEvaluation evaluateDelivery(Application app) {
-        if (app == null || app.delivery() == null) {
-            return new DeliveryEvaluation(false, false, List.of());
-        }
-
-        if (Boolean.FALSE.equals(app.delivery().useCurrentAddress())) {
-            Application.Address address = app.delivery().address();
-            if (address == null) {
-                return new DeliveryEvaluation(true, false, List.of("VER_MISSING_FIELD:delivery.address"));
-            }
-
-            List<String> missing = new java.util.ArrayList<>();
-            if (!hasText(address.line1())) {
-                missing.add("VER_MISSING_FIELD:delivery.address.line1");
-            }
-            if (!hasText(address.city())) {
-                missing.add("VER_MISSING_FIELD:delivery.address.city");
-            }
-            if (!hasText(address.postcode())) {
-                missing.add("VER_MISSING_FIELD:delivery.address.postcode");
-            }
-            if (!hasText(address.country())) {
-                missing.add("VER_MISSING_FIELD:delivery.address.country");
-            }
-            if (!missing.isEmpty()) {
-                return new DeliveryEvaluation(true, false, missing);
-            }
-
-            // Alternate delivery addresses are allowed, but require manual review.
-            return new DeliveryEvaluation(false, true, List.of("VER_DELIVERY_ALTERNATE_ADDRESS_REVIEW"));
-        }
-        return new DeliveryEvaluation(false, false, List.of());
-    }
-
-    private HighRiskEvaluation evaluateHighRiskCountry(Application app) {
-        if (app == null) {
-            return new HighRiskEvaluation(false, List.of());
-        }
-
-        boolean isHighRisk = false;
-        if (app.applicant() != null) {
-            isHighRisk = isHighRiskCountry(app.applicant().nationality())
-                    || isHighRiskCountry(app.applicant().countryOfResidence())
-                    || (app.applicant().taxResidencies() != null
-                            && app.applicant().taxResidencies().stream().anyMatch(this::isHighRiskCountry));
-        }
-        if (!isHighRisk && app.identityDocument() != null) {
-            isHighRisk = isHighRiskCountry(app.identityDocument().issuingCountry());
-        }
-
-        if (isHighRisk) {
-            return new HighRiskEvaluation(true, List.of("VER_HIGH_RISK_COUNTRY"));
-        }
-        return new HighRiskEvaluation(false, List.of());
-    }
-
-    private boolean isPartialNameMatch(String candidate, String blocked) {
-        String[] candidateParts = candidate.split(" ");
-        String[] blockedParts = blocked.split(" ");
-        if (candidateParts.length < 2 || blockedParts.length < 2) {
-            return false;
-        }
-
-        String candidateFirst = candidateParts[0];
-        String blockedFirst = blockedParts[0];
-        String candidateLast = candidateParts[candidateParts.length - 1];
-        String blockedLast = blockedParts[blockedParts.length - 1];
-
-        boolean firstNameSimilar = hasSharedPrefix(candidateFirst, blockedFirst, MIN_PARTIAL_NAME_PREFIX);
-        boolean lastNameSimilar = hasSharedPrefix(candidateLast, blockedLast, MIN_PARTIAL_NAME_PREFIX);
-        return firstNameSimilar && lastNameSimilar;
-    }
-
-    private boolean hasSharedPrefix(String left, String right, int minLength) {
-        int max = Math.min(left.length(), right.length());
-        int count = 0;
-        for (int i = 0; i < max; i++) {
-            if (left.charAt(i) != right.charAt(i)) {
-                break;
-            }
-            count++;
-        }
-        return count >= minLength;
-    }
-
-    private String normalizeName(String name) {
-        return Arrays.stream(name.trim().toUpperCase().split("\\s+"))
-                .filter(part -> !part.isBlank())
-                .collect(Collectors.joining(" "));
-    }
-
     private AgeEvaluation evaluateAge(Application app, ProductConfig config) {
         if (config == null) {
-            return new AgeEvaluation(true, false, List.of("VER_PRODUCT_NOT_FOUND"));
+            return new AgeEvaluation(false, false, List.of());
         }
         if (config.getMinAge() == null) {
             return new AgeEvaluation(false, false, List.of());
         }
         if (app == null || app.applicant() == null || !hasText(app.applicant().dateOfBirth())) {
-            return new AgeEvaluation(true, false, List.of("VER_MISSING_FIELD:applicant.dateOfBirth"));
+            return new AgeEvaluation(false, false, List.of());
         }
 
         LocalDate dob;
         try {
             dob = LocalDate.parse(app.applicant().dateOfBirth());
         } catch (RuntimeException e) {
-            return new AgeEvaluation(true, false, List.of("VER_INVALID_FIELD:applicant.dateOfBirth"));
+            return new AgeEvaluation(false, false, List.of());
         }
 
-        int age = Period.between(dob, LocalDate.now(Clock.systemUTC())).getYears();
+        int age = Period.between(dob, LocalDate.now(clock)).getYears();
         if (age < config.getMinAge()) {
             return new AgeEvaluation(true, false, List.of("VER_AGE_BELOW_MINIMUM"));
+        }
+        // UC-02 AC-5: exactly at minAge → REVIEW (boundary outranks hard failure)
+        if (age == config.getMinAge()) {
+            return new AgeEvaluation(false, true, List.of("VER_AGE_EXACT_MINIMUM"));
         }
         return new AgeEvaluation(false, false, List.of());
     }
 
     private List<String> evaluateProductActive(ProductConfig config) {
         if (config == null) {
-            return List.of("VER_PRODUCT_NOT_FOUND");
+            return List.of();
         }
         if (!Boolean.TRUE.equals(config.getActive())) {
             return List.of("VER_PRODUCT_INACTIVE");
@@ -651,7 +450,7 @@ public class ApplicationService {
 
     private List<String> evaluateChannel(Application app, ProductConfig config) {
         if (config == null) {
-            return List.of("VER_PRODUCT_NOT_FOUND");
+            return List.of();
         }
         if (!hasText(config.getChannels())) {
             return List.of();
@@ -673,17 +472,13 @@ public class ApplicationService {
     }
 
     private List<String> evaluateEmploymentStatus(Application app, ProductConfig config) {
-        // If product has no employment status restriction, this rule passes.
         if (config == null || !hasText(config.getAllowedEmploymentStatuses())) {
             return List.of();
         }
-
-        // If application has no employment data, fail.
         if (app == null || app.employment() == null || !hasText(app.employment().status())) {
             return List.of("VER_MISSING_FIELD:employment.status");
         }
 
-        // Check if application's employment status is in the allowed set.
         Set<String> allowed = Stream.of(config.getAllowedEmploymentStatuses().split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
@@ -728,11 +523,7 @@ public class ApplicationService {
                 }
             }
         }
-        return decision == Decision.REVIEW ? "VER_MANUAL_REVIEW_REQUIRED" : "VER_RULE_FAILED";
-    }
-
-    private boolean isHighRiskCountry(String code) {
-        return hasText(code) && HIGH_RISK_COUNTRIES.contains(code.toUpperCase());
+        return "VER_RULE_FAILED";
     }
 
     private boolean hasText(String value) {
@@ -748,7 +539,19 @@ public class ApplicationService {
         }
     }
 
-    private record AgeEvaluation(boolean hardFailure, boolean reviewFlag, List<String> reasons) {
+    private boolean isIsoAlpha2(String code) {
+        return code != null && code.matches("^[A-Z]{2}$");
+    }
+
+    private boolean isValidEmail(String email) {
+        return email != null && email.contains("@");
+    }
+
+    private boolean isValidMobile(String mobile) {
+        return mobile != null && mobile.matches("^\\+\\d{7,15}$");
+    }
+
+    private record AgeEvaluation(boolean hardFailure, boolean review, List<String> reasons) {
     }
 
     private record DecisionResult(
@@ -758,18 +561,6 @@ public class ApplicationService {
             String ruleResultsJson) {
     }
 
-    private record LimitEvaluation(boolean hardFailure, boolean reviewFlag, List<String> reasons) {
-    }
-
-    private record NameEvaluation(boolean hardFailure, boolean reviewFlag, List<String> reasons) {
-    }
-
-    private record HighRiskEvaluation(boolean reviewFlag, List<String> reasons) {
-    }
-
-    private record AffordabilityEvaluation(boolean hardFailure, boolean reviewFlag, List<String> reasons) {
-    }
-
-    private record DeliveryEvaluation(boolean hardFailure, boolean reviewFlag, List<String> reasons) {
+    private record LimitEvaluation(boolean hardFailure, boolean review, List<String> reasons) {
     }
 }
