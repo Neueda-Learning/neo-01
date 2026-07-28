@@ -12,3 +12,5 @@ databaseChangeLog:
       file: db/changelog/changes/004-seed-product-config.yaml
   - include:
       file: db/changelog/changes/005-add-full-name.yaml
+  - include:
+      file: db/changelog/changes/006-seed-product-config-rewards-history.yaml

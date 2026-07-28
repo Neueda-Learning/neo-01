@@ -135,6 +135,22 @@ class ModuleApplicationTests {
     }
 
     @Test
+    void productVersionHistoryIsReturnedOldestFirstWithCurrentFlag() throws Exception {
+        mvc.perform(get("/products/CREDIT_CARD_REWARDS/versions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].version").value(1))
+                .andExpect(jsonPath("$[1].version").value(2))
+                .andExpect(jsonPath("$[2].version").value(3))
+                .andExpect(jsonPath("$[3].version").value(4))
+                .andExpect(jsonPath("$[0].current").value(false))
+                .andExpect(jsonPath("$[1].current").value(false))
+                .andExpect(jsonPath("$[2].current").value(false))
+                .andExpect(jsonPath("$[3].current").value(true))
+                .andExpect(jsonPath("$[0].channels[0]").value("WEB"))
+                .andExpect(jsonPath("$[3].active").value(false));
+    }
+
+    @Test
     void malformedJsonIsA400WithSomethingToRead() throws Exception {
         // You will meet this: the sidecar lets you edit the envelope before sending it.
         mvc.perform(post("/api/v1/applications")
