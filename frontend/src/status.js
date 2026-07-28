@@ -7,6 +7,9 @@
 import { TONES, toneMapper } from './design-system';
 
 export const statusTone = toneMapper({
+  PASSED: TONES.POSITIVE,
+  FAILED: TONES.NEGATIVE,
+  REVIEW: TONES.WARNING,
   ACCEPTED: TONES.POSITIVE,
   REJECTED: TONES.NEGATIVE,
   REFERRED: TONES.WARNING,

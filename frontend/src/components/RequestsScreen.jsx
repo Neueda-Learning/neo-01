@@ -20,9 +20,9 @@ import { statusTone, time } from '../status.js';
 
 const FILTERS = [
   'All',
-  { value: 'ACCEPTED', label: 'PASSED' },
-  { value: 'REJECTED', label: 'FAILED' },
-  { value: 'REFERRED', label: 'REVIEW' },
+  { value: 'PASSED', label: 'PASSED' },
+  { value: 'FAILED', label: 'FAILED' },
+  { value: 'REVIEW', label: 'REVIEW' },
 ];
 const NAME_BY_APP_ID = {
   'app-1234': 'Maria Nowak',
@@ -143,6 +143,9 @@ const CASE_DETAIL_BY_APP_ID = {
 
 function toDecisionLabel(status) {
   const normalized = String(status ?? '').toUpperCase();
+  if (normalized === 'PASSED') return 'PASSED';
+  if (normalized === 'FAILED') return 'FAILED';
+  if (normalized === 'REVIEW') return 'REVIEW';
   if (normalized === 'ACCEPTED') return 'PASSED';
   if (normalized === 'REJECTED') return 'FAILED';
   if (normalized === 'REFERRED') return 'REVIEW';
@@ -273,13 +276,13 @@ function mapLiveApplicant(payload) {
  * screen's rules, a toolbar that narrows, a capped table. The 10-row cap and its footnote come from
  * DataTable — no screen re-implements them.
  */
-export default function RequestsScreen({ requests, error, loading, onLoad }) {
+export default function RequestsScreen({ requests, more, error, loading, onLoad }) {
   const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
   const [fromDate, setFromDate] = useState('2026-07-01');
   const [toDate, setToDate] = useState('2026-07-21');
-  const [hasAsked, setHasAsked] = useState(true);
+  const [hasAsked, setHasAsked] = useState(false);
   const [selectedApplicationId, setSelectedApplicationId] = useState(null);
   const [liveApplicant, setLiveApplicant] = useState({ status: 'idle', data: null, error: null });
 
@@ -302,7 +305,7 @@ export default function RequestsScreen({ requests, error, loading, onLoad }) {
       if (createdDate && toDate && createdDate > toDate) return false;
 
       if (!needle) return true;
-      const applicantName = (NAME_BY_APP_ID[r.applicationId] ?? '').toLowerCase();
+      const applicantName = (r.fullName ?? NAME_BY_APP_ID[r.applicationId] ?? '').toLowerCase();
       return r.applicationId.toLowerCase().includes(needle) || applicantName.includes(needle);
     });
   }, [requests, query, filter, fromDate, toDate, hasAsked]);
@@ -342,7 +345,7 @@ export default function RequestsScreen({ requests, error, loading, onLoad }) {
       key: 'applicant',
       header: 'Applicant',
       width: '22%',
-      render: (r) => NAME_BY_APP_ID[r.applicationId] ?? '—',
+      render: (r) => r.fullName ?? NAME_BY_APP_ID[r.applicationId] ?? '—',
     },
     { key: 'createdAt', header: 'Submitted', width: '22%', render: (r) => time(r.createdAt) },
     {
@@ -358,7 +361,7 @@ export default function RequestsScreen({ requests, error, loading, onLoad }) {
       tight: true,
       numeric: true,
       width: '10%',
-      render: (r) => reasonCount(r.ruleResults),
+      render: (r) => (typeof r.reasonCount === 'number' ? r.reasonCount : reasonCount(r.ruleResults)),
     },
   ];
 
@@ -375,10 +378,6 @@ export default function RequestsScreen({ requests, error, loading, onLoad }) {
 
     let cancelled = false;
     setLiveApplicant({ status: 'loading', data: null, error: null });
-
-    onLoad()
-      .catch(() => undefined)
-      .then(() => undefined);
 
     api
       .getApplication(selectedRow.applicationId)
@@ -402,7 +401,7 @@ export default function RequestsScreen({ requests, error, loading, onLoad }) {
       ...detailBase,
       rules: detailBase.rules?.length ? detailBase.rules : makeFallbackRules(selectedRow),
     };
-    const applicant = NAME_BY_APP_ID[selectedRow.applicationId] ?? 'Unknown applicant';
+    const applicant = selectedRow.fullName ?? NAME_BY_APP_ID[selectedRow.applicationId] ?? 'Unknown applicant';
     const caseOutcome = toDecisionLabel(selectedRow.status);
 
     const liveData = liveApplicant.data;
@@ -482,7 +481,7 @@ export default function RequestsScreen({ requests, error, loading, onLoad }) {
       />
 
       {error && requests.length === 0 && (
-        <Alert tone="negative" title="Could not load applications">
+        <Alert tone="negative" title="Could not load cases">
           {error}
         </Alert>
       )}
@@ -497,6 +496,7 @@ export default function RequestsScreen({ requests, error, loading, onLoad }) {
               setQueryInput(value);
               setQuery(value);
               setHasAsked(true);
+              void onLoad(value);
             }}
             aria-label="Search application id or applicant name"
           />
@@ -539,7 +539,7 @@ export default function RequestsScreen({ requests, error, loading, onLoad }) {
         className="verification-board-results"
         columns={columns}
         rows={matches}
-        total={matches.length}
+        total={matches.length + (more ? 1 : 0)}
         rowKey={(r) => r.applicationId}
         onRowClick={(row) => setSelectedApplicationId(row.applicationId)}
         footnote="newest first"
