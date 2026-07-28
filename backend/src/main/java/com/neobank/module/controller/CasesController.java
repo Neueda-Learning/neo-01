@@ -1,8 +1,10 @@
 package com.neobank.module.controller;
 
+import com.neobank.module.dto.ApplicantView;
 import com.neobank.module.service.CaseService;
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -43,5 +45,10 @@ public class CasesController {
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "10") int limit) {
         return caseService.search(q, limit);
+    }
+
+    @GetMapping("/{id}/applicant")
+    public ApplicantView applicant(@PathVariable("id") String applicationId) {
+        return caseService.findApplicant(applicationId);
     }
 }

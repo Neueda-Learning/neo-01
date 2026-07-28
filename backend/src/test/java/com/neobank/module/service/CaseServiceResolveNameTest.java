@@ -1,12 +1,16 @@
 package com.neobank.module.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.neobank.module.integrations.orchestrator.Application;
+import com.neobank.module.integrations.orchestrator.OrchestratorClient;
+import com.neobank.module.integrations.orchestrator.OrchestratorUnavailableException;
 import com.neobank.module.model.Decision;
 import com.neobank.module.model.VerificationRecord;
 import com.neobank.module.repository.VerificationRecordRepository;
@@ -27,12 +31,14 @@ import org.springframework.data.domain.Pageable;
 class CaseServiceResolveNameTest {
 
     private VerificationRecordRepository repo;
+    private OrchestratorClient orchestrator;
     private CaseService service;
 
     @BeforeEach
     void setUp() {
         repo = mock(VerificationRecordRepository.class);
-        service = new CaseService(repo);
+        orchestrator = mock(OrchestratorClient.class);
+        service = new CaseService(repo, orchestrator);
     }
 
     @Test
@@ -83,6 +89,55 @@ class CaseServiceResolveNameTest {
 
         assertThat(result.get("cases")).asList().hasSize(10);
         assertThat(result.get("more")).isEqualTo(true);
+    }
+
+    @Test
+    void applicantPayloadIsMappedFromOrchestratorApplication() {
+        Application app = new Application(
+                "app-1234",
+                "MOBILE_APP",
+                "2026-07-25T09:14:00Z",
+                new Application.Applicant(
+                        "Maria Nowak",
+                        "1996-04-11",
+                        null,
+                        null,
+                        null,
+                        "PL",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null),
+                null,
+                null,
+                null,
+                new Application.Product("CREDIT_CARD_REWARDS", 3000),
+                null,
+                new Application.Consents(true, null, null));
+        when(orchestrator.getApplication("app-1234")).thenReturn(app);
+
+        var result = service.findApplicant("app-1234");
+
+        assertThat(result.fullName()).isEqualTo("Maria Nowak");
+        assertThat(result.dateOfBirth()).isEqualTo("1996-04-11");
+        assertThat(result.product().productCode()).isEqualTo("CREDIT_CARD_REWARDS");
+        assertThat(result.product().requestedCreditLimit()).isEqualTo(3000);
+        assertThat(result.channel()).isEqualTo("MOBILE_APP");
+        assertThat(result.countryOfResidence()).isEqualTo("PL");
+        assertThat(result.consents().termsAccepted()).isTrue();
+    }
+
+    @Test
+    void orchestratorUnavailabilityIsPropagated() {
+        when(orchestrator.getApplication("app-1234"))
+                .thenThrow(new OrchestratorUnavailableException(
+                        "Orchestrator is unreachable. Please retry.",
+                        new RuntimeException("connection refused")));
+
+        assertThatThrownBy(() -> service.findApplicant("app-1234"))
+                .isInstanceOf(OrchestratorUnavailableException.class)
+                .hasMessageContaining("Orchestrator is unreachable");
     }
 }
 

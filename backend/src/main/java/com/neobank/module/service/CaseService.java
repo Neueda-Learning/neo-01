@@ -1,11 +1,15 @@
 package com.neobank.module.service;
 
+import com.neobank.module.dto.ApplicantView;
 import com.neobank.module.dto.CaseSearchResult;
+import com.neobank.module.integrations.orchestrator.Application;
+import com.neobank.module.integrations.orchestrator.OrchestratorClient;
 import com.neobank.module.model.VerificationRecord;
 import com.neobank.module.repository.VerificationRecordRepository;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -28,9 +32,11 @@ public class CaseService {
     private static final int DEFAULT_LIMIT = 10;
 
     private final VerificationRecordRepository cases;
+    private final OrchestratorClient orchestrator;
 
-    public CaseService(VerificationRecordRepository cases) {
+    public CaseService(VerificationRecordRepository cases, OrchestratorClient orchestrator) {
         this.cases = cases;
+        this.orchestrator = orchestrator;
     }
 
     /**
@@ -52,6 +58,31 @@ public class CaseService {
 
         List<VerificationRecord> hits = cases.searchByIdOrName(q, pageable);
         return toResponse(hits, cap);
+    }
+
+    /**
+     * UC-03: fetch applicant fields live from orchestrator using applicationId as-is.
+     */
+    public ApplicantView findApplicant(String applicationId) {
+        Application app = orchestrator.getApplication(applicationId);
+        if (app == null) {
+            throw new NoSuchElementException("Unknown applicationId: " + applicationId);
+        }
+
+        Application.Applicant applicant = app.applicant();
+        Application.Product product = app.product();
+        Application.Consents consents = app.consents();
+
+        return new ApplicantView(
+                applicant == null ? null : applicant.fullName(),
+                applicant == null ? null : applicant.dateOfBirth(),
+                new ApplicantView.ProductView(
+                        product == null ? null : product.productCode(),
+                        product == null ? null : product.requestedCreditLimit()),
+                app.channel(),
+                applicant == null ? null : applicant.countryOfResidence(),
+                new ApplicantView.ConsentsView(
+                        consents == null ? null : consents.termsAccepted()));
     }
 
     // ── internal helpers ────────────────────────────────────────────────────────
