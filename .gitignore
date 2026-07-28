@@ -19,6 +19,7 @@ frontend/dist/
 
 # reference:
 ./reference
+
 # A local clone of the sidecar, if you make one. It is BUILT FROM GIT by
 # docker-compose.yml, so it must never be committed: committed as a gitlink with no
 # .gitmodules entry it breaks `submodules: recursive` in neo-00.
