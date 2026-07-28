@@ -1,5 +1,6 @@
 package com.neobank.module.controller;
 
+import com.neobank.module.integrations.orchestrator.OrchestratorUnavailableException;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -72,6 +73,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoSuchElementException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(NoSuchElementException ex) {
         return error(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(OrchestratorUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleOrchestratorUnavailable(
+            OrchestratorUnavailableException ex) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, Object>> handleUnexpected(Exception ex) {
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "internal server error");
     }
 
     private ResponseEntity<Map<String, Object>> error(HttpStatus status, String message) {
