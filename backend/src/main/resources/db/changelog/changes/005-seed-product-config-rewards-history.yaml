@@ -1,0 +1,52 @@
+databaseChangeLog:
+
+  - changeSet:
+      id: 005-seed-product-config-rewards-v2
+      author: neo-01
+      comment: Seed version 2 for CREDIT_CARD_REWARDS
+      changes:
+        - insert:
+            tableName: product_config
+            columns:
+              - column: { name: product_code, value: 'CREDIT_CARD_REWARDS' }
+              - column: { name: version, valueNumeric: 2 }
+              - column: { name: min_age, valueNumeric: 18 }
+              - column: { name: limit_min, valueNumeric: 1200 }
+              - column: { name: limit_max, valueNumeric: 11000 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: channels, value: 'WEB,MOBILE_APP,BRANCH' }
+              - column: { name: effective_from, value: '2026-07-02 00:00:00' }
+
+  - changeSet:
+      id: 005-seed-product-config-rewards-v3
+      author: neo-01
+      comment: Seed version 3 for CREDIT_CARD_REWARDS
+      changes:
+        - insert:
+            tableName: product_config
+            columns:
+              - column: { name: product_code, value: 'CREDIT_CARD_REWARDS' }
+              - column: { name: version, valueNumeric: 3 }
+              - column: { name: min_age, valueNumeric: 19 }
+              - column: { name: limit_min, valueNumeric: 1500 }
+              - column: { name: limit_max, valueNumeric: 12000 }
+              - column: { name: active, valueBoolean: true }
+              - column: { name: channels, value: 'WEB,MOBILE_APP,BRANCH,PHONE' }
+              - column: { name: effective_from, value: '2026-07-03 00:00:00' }
+
+  - changeSet:
+      id: 005-seed-product-config-rewards-v4
+      author: neo-01
+      comment: Seed version 4 for CREDIT_CARD_REWARDS
+      changes:
+        - insert:
+            tableName: product_config
+            columns:
+              - column: { name: product_code, value: 'CREDIT_CARD_REWARDS' }
+              - column: { name: version, valueNumeric: 4 }
+              - column: { name: min_age, valueNumeric: 20 }
+              - column: { name: limit_min, valueNumeric: 2000 }
+              - column: { name: limit_max, valueNumeric: 15000 }
+              - column: { name: active, valueBoolean: false }
+              - column: { name: channels, value: 'WEB,BRANCH' }
+              - column: { name: effective_from, value: '2026-07-04 00:00:00' }
