@@ -51,4 +51,26 @@ export const api = {
   },
   listProductCodes: () => request('/products'),
   getProductVersions: (code) => request(`/products/${code}/versions`),
+  
+  // UC-05: Override Case
+  overrideCase: (applicationId, overrideCaseRequest) =>
+    request(`/cases/${applicationId}/override`, {
+      method: 'POST',
+      body: JSON.stringify(overrideCaseRequest),
+    }),
+
+  // UC-04: Failure Patterns
+  reasonCodeCounts: (from, to) => {
+    const params = new URLSearchParams();
+    params.set('from', from);
+    params.set('to', to);
+    return request(`/reason-codes?${params.toString()}`);
+  },
+
+  // UC-06: Create Product Version
+  createProductVersion: (createProductVersionRequest) =>
+    request('/products', {
+      method: 'POST',
+      body: JSON.stringify(createProductVersionRequest),
+    }),
 };

@@ -17,6 +17,7 @@ import {
 } from '../design-system';
 import { api } from '../api.js';
 import { statusTone, time } from '../status.js';
+import OverrideModal from './OverrideModal.jsx';
 
 const FILTERS = [
   'All',
@@ -114,6 +115,8 @@ export default function RequestsScreen({ requests, more, error, loading, onLoad 
   const [selectedApplicationId, setSelectedApplicationId] = useState(null);
   const [caseDetail, setCaseDetail] = useState({ status: 'idle', data: null, error: null });
   const [liveApplicant, setLiveApplicant] = useState({ status: 'idle', data: null, error: null });
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
     if (requests.length > 0) {
@@ -321,11 +324,26 @@ export default function RequestsScreen({ requests, more, error, loading, onLoad 
         </Split>
 
         <div className="verification-detail-actions">
-          <Button variant="primary">Override decision...</Button>
+          <Button variant="primary" onClick={() => setShowOverrideModal(true)}>
+            Override decision...
+          </Button>
           <Button variant="secondary" onClick={() => setSelectedApplicationId(null)}>
             Back to board
           </Button>
         </div>
+
+        {showOverrideModal && (
+          <OverrideModal
+            applicationId={selectedRow.applicationId}
+            currentOutcome={caseOutcome}
+            onClose={() => setShowOverrideModal(false)}
+            onSuccess={() => {
+              // Refresh case detail after successful override
+              setRefreshTrigger((prev) => prev + 1);
+              void onLoad(query);
+            }}
+          />
+        )}
       </>
     );
   }

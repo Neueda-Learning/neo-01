@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { AppShell, EmptyState, TopNav } from './design-system';
 import ProductConfigurationScreen from './components/ProductConfigurationScreen.jsx';
 import RequestsScreen from './components/RequestsScreen.jsx';
+import FailurePatternsScreen from './components/FailurePatternsScreen.jsx';
 import { api } from './api.js';
 
 const SCREENS = [
@@ -64,9 +65,7 @@ export default function App() {
       )}
 
       {screen === 'failure-patterns' && (
-        <EmptyState title="Failure Patterns">
-          This screen will show ranked reason codes by date window (UC04).
-        </EmptyState>
+        <FailurePatternsScreen />
       )}
 
       {screen === 'product-configuration' && (
