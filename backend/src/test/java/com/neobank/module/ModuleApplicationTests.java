@@ -14,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -44,6 +45,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class ModuleApplicationTests {
 
     /**
@@ -77,7 +79,7 @@ class ModuleApplicationTests {
                                                                         "email": "maria.nowak@example.com",
                                                                         "mobile": "+447700900111"
                                                                 },
-                                "product": {"productCode": "CREDIT_CARD_REWARDS", "requestedCreditLimit": 3000},
+                                                                                                                                "product": {"productCode": "%s", "requestedCreditLimit": 3000},
                                 "consents": {"termsAccepted": true}
               }
             }
@@ -86,8 +88,8 @@ class ModuleApplicationTests {
     @Autowired
     private MockMvc mvc;
 
-    private static String application(String id) {
-        return APPLICATION.formatted(id, id);
+        private static String application(String id, String productCode) {
+                return APPLICATION.formatted(id, id, productCode);
     }
 
     @Test
@@ -126,7 +128,7 @@ class ModuleApplicationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {
-                          "productCode": "CREDIT_CARD_REWARDS",
+                          "productCode": "IT_PRODUCT_ACCEPT",
                           "minAge": 18,
                           "limitMin": 500,
                           "limitMax": 10000,
@@ -138,7 +140,7 @@ class ModuleApplicationTests {
 
         mvc.perform(post("/api/v1/applications")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(application("IT-ONE")))
+                .content(application("IT-ONE", "IT_PRODUCT_ACCEPT")))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.status").value("in-progress"))
                 .andExpect(jsonPath("$.applicationId").value("IT-ONE"))
@@ -173,7 +175,63 @@ class ModuleApplicationTests {
 
     @Test
     void productVersionHistoryIsReturnedOldestFirstWithCurrentFlag() throws Exception {
-        mvc.perform(get("/products/CREDIT_CARD_REWARDS/versions"))
+        mvc.perform(post("/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "productCode": "IT_PRODUCT_HISTORY",
+                          "minAge": 18,
+                          "limitMin": 1000,
+                          "limitMax": 10000,
+                          "active": true,
+                          "channels": ["WEB", "MOBILE_APP", "BRANCH"]
+                        }
+                        """))
+                .andExpect(status().isCreated());
+
+        mvc.perform(post("/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "productCode": "IT_PRODUCT_HISTORY",
+                          "minAge": 18,
+                          "limitMin": 1200,
+                          "limitMax": 11000,
+                          "active": true,
+                          "channels": ["WEB", "MOBILE_APP", "BRANCH"]
+                        }
+                        """))
+                .andExpect(status().isCreated());
+
+        mvc.perform(post("/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "productCode": "IT_PRODUCT_HISTORY",
+                          "minAge": 19,
+                          "limitMin": 1500,
+                          "limitMax": 12000,
+                          "active": true,
+                          "channels": ["WEB", "MOBILE_APP", "BRANCH", "PHONE"]
+                        }
+                        """))
+                .andExpect(status().isCreated());
+
+        mvc.perform(post("/products")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "productCode": "IT_PRODUCT_HISTORY",
+                          "minAge": 20,
+                          "limitMin": 2000,
+                          "limitMax": 15000,
+                          "active": false,
+                          "channels": ["WEB", "BRANCH"]
+                        }
+                        """))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/products/IT_PRODUCT_HISTORY/versions"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].version").value(1))
                 .andExpect(jsonPath("$[1].version").value(2))

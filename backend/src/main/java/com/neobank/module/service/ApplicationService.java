@@ -167,7 +167,8 @@ public class ApplicationService {
                     result.decision(),
                     result.reference(),
                     result.productConfigId(),
-                    result.ruleResultsJson(), fullName));
+                    result.ruleResultsJson(), 
+                    fullName));
             orchestrator.applicationStatusUpdate(applicationId, result.decision(), result.reference());
         } catch (RuntimeException e) {
             log.error("processApplication failed for {} — referring", applicationId, e);
