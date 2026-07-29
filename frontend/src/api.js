@@ -65,7 +65,7 @@ export const api = {
     const params = new URLSearchParams();
     params.set('from', from);
     params.set('to', to);
-    return request(`/reason-codes?${params.toString()}`);
+    return request(`/api/reason-codes?${params.toString()}`);
   },
 
   // UC-06: Create Product Version

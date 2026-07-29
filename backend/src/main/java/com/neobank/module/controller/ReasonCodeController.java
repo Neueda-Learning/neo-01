@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>The endpoint is idempotent — identical parameters always return the same result.</p>
  */
 @RestController
-@RequestMapping("/reason-codes")
+@RequestMapping("/api/reason-codes")
 @CrossOrigin(originPatterns = "*", allowCredentials = "true", maxAge = 3600)
 @Tag(name = "Failure Patterns", description = "UC-04 — ranked reason-code counts over a date window")
 public class ReasonCodeController {
