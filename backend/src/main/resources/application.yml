@@ -74,7 +74,7 @@ service:
   #   http://localhost:9000      that same sidecar, from a module you run in your IDE (this default)
   #   http://orchestrator:8080   the REAL orchestrator, in the neo-00 system stack
   # Nothing in the module changes between them — only this value.
-  orchestrator-url: ${ORCHESTRATOR_URL:http://localhost:9000}
+  orchestrator-url: ${ORCHESTRATOR_URL:http://neobank-dev-571740187.ap-southeast-1.elb.amazonaws.com}
   # Comma-separated external systems this module fakes — the "what has been mocked" register,
   # served live on /info so it cannot go stale the way a paragraph in a document does. Empty
   # means you are claiming nothing is mocked.
