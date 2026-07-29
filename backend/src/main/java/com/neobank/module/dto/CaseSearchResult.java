@@ -48,7 +48,7 @@ public record CaseSearchResult(
         try {
             List<Map<String, Object>> rules = MAPPER.readValue(ruleResults, RULE_LIST);
             return (int) rules.stream()
-                    .filter(r -> Boolean.FALSE.equals(r.get("pass")))
+                    .filter(r -> Boolean.FALSE.equals(r.get("passed")))
                     .count();
         } catch (Exception e) {
             return 0;
