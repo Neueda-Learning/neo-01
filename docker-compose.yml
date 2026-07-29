@@ -46,7 +46,7 @@ services:
       # The sidecar plays the orchestrator here, so callbacks have somewhere real to land and
       # you can see BOTH halves of the contract. Point this at http://orchestrator:8080 to talk
       # to the real one instead — nothing else in the module changes.
-      ORCHESTRATOR_URL: ${ORCHESTRATOR_URL:-http://sidecar:8080}
+      ORCHESTRATOR_URL: ${ORCHESTRATOR_URL:-http://neobank-dev-571740187.ap-southeast-1.elb.amazonaws.com}
       # Any localhost port by default — see WebConfig for why a fixed list breaks the UI.
       CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost:*,http://127.0.0.1:*}
     ports:

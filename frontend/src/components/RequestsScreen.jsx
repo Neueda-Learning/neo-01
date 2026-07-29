@@ -232,7 +232,7 @@ export default function RequestsScreen({ requests, more, error, loading, onLoad 
       });
 
     api
-      .getApplication(selectedRow.applicationId)
+      .getApplicantFromOrchestrator(selectedRow.applicationId)
       .then((payload) => {
         if (cancelled) return;
         setLiveApplicant({ status: 'ready', data: mapLiveApplicant(payload), error: null });
