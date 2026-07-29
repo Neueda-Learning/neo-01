@@ -45,7 +45,10 @@ const MOCK_VERSION_HISTORY = {
     {
       version: 'v1',
       meta: 'current',
-      summary: 'min 18 · 500-5,000 · active',
+      minAge: 18,
+      creditLimitMin: 500,
+      creditLimitMax: 5000,
+      active: true,
       channels: 'channels WEB/MOBILE_APP',
       current: true,
     },
@@ -54,26 +57,38 @@ const MOCK_VERSION_HISTORY = {
     {
       version: 'v4',
       meta: 'current',
-      summary: 'min 20 · 2,000-15,000 · inactive',
+      minAge: 20,
+      creditLimitMin: 2000,
+      creditLimitMax: 15000,
+      active: false,
       channels: 'channels WEB/BRANCH',
       current: true,
     },
     {
       version: 'v3',
       meta: '2026-07-03',
-      summary: 'min 19 · 1,500-12,000 · active',
+      minAge: 19,
+      creditLimitMin: 1500,
+      creditLimitMax: 12000,
+      active: true,
       channels: 'channels WEB/MOBILE_APP/BRANCH/PHONE',
     },
     {
       version: 'v2',
       meta: '2026-07-02',
-      summary: 'min 18 · 1,200-11,000 · active',
+      minAge: 18,
+      creditLimitMin: 1200,
+      creditLimitMax: 11000,
+      active: true,
       channels: 'channels WEB/MOBILE_APP/BRANCH',
     },
     {
       version: 'v1',
       meta: '2026-07-01',
-      summary: 'min 18 · 1,000-10,000 · active',
+      minAge: 18,
+      creditLimitMin: 1000,
+      creditLimitMax: 10000,
+      active: true,
       channels: 'channels WEB/MOBILE_APP/BRANCH',
     },
   ],
@@ -81,12 +96,24 @@ const MOCK_VERSION_HISTORY = {
     {
       version: 'v1',
       meta: 'current',
-      summary: 'min 18 · 500-3,000 · active',
+      minAge: 18,
+      creditLimitMin: 500,
+      creditLimitMax: 3000,
+      active: true,
       channels: 'channels WEB/MOBILE',
       current: true,
     },
   ],
 };
+
+function HistoryField({ label, value }) {
+  return (
+    <div className="product-config-history__field">
+      <span className="product-config-history__field-label">{label}</span>
+      <span className="product-config-history__field-value">{value}</span>
+    </div>
+  );
+}
 
 export default function ProductConfigurationScreen() {
   const [selectedProductCode, setSelectedProductCode] = useState('CREDIT_CARD_REWARDS');
@@ -114,7 +141,10 @@ export default function ProductConfigurationScreen() {
             versions.map((entry) => ({
               version: `v${entry.version}`,
               meta: entry.current ? 'current' : String(entry.effectiveFrom).slice(0, 10),
-              summary: `min ${entry.minAge} · ${entry.limitMin.toLocaleString('en-GB')}-${entry.limitMax.toLocaleString('en-GB')} · ${entry.active ? 'active' : 'inactive'}`,
+              minAge: entry.minAge,
+              creditLimitMin: entry.limitMin,
+              creditLimitMax: entry.limitMax,
+              active: entry.active,
               channels:
                 entry.channels && entry.channels.length > 0
                   ? `channels ${entry.channels.join('/')}`
@@ -213,10 +243,24 @@ export default function ProductConfigurationScreen() {
                   <div className="product-config-history__meta">
                     {entry.version} · {entry.meta}
                   </div>
-                  <div className="product-config-history__summary">{entry.summary}</div>
-                  {entry.channels && (
-                    <div className="product-config-history__channels">{entry.channels}</div>
-                  )}
+                          <div className="product-config-history__details">
+                            <HistoryField label="Age" value={entry.minAge} />
+                            <HistoryField
+                              label="Credit Limit Min"
+                              value={entry.creditLimitMin?.toLocaleString('en-GB')}
+                            />
+                            <HistoryField
+                              label="Credit Limit Max"
+                              value={entry.creditLimitMax?.toLocaleString('en-GB')}
+                            />
+                            <HistoryField label="Active" value={entry.active ? 'Yes' : 'No'} />
+                            {entry.channels && (
+                              <div className="product-config-history__channels-box">
+                                <span className="product-config-history__field-label">Channels</span>
+                                <div className="product-config-history__channels">{entry.channels}</div>
+                              </div>
+                            )}
+                          </div>
                 </div>
               ))}
             </div>
