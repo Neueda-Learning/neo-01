@@ -60,6 +60,9 @@
 .product-config-history {
   display: grid;
   gap: var(--ds-space-6);
+  max-height: calc(100vh - 320px);
+  overflow-y: auto;
+  padding-right: var(--ds-space-2);
 }
 
 .product-config-history__row {
@@ -69,18 +72,65 @@
   align-items: start;
 }
 
+.product-config-history__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+}
+
+.product-config-history__field {
+  display: grid;
+  gap: var(--ds-space-1);
+  flex: 1 1 160px;
+  min-width: 150px;
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
 .product-config-history__meta,
 .product-config-history__channels {
   color: var(--ds-color-text-muted);
 }
 
-.product-config-history__summary,
+.product-config-history__field-label {
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ds-color-text-muted);
+}
+
+.product-config-history__field-value,
 .product-config-history__channels {
   font-size: var(--ds-text-lg);
 }
 
+.product-config-history__field-value {
+  color: var(--ds-color-text);
+  line-height: 1.15;
+}
+
+.product-config-history__channels-box {
+  display: grid;
+  gap: var(--ds-space-2);
+  flex: 0 0 100%;
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
 .product-config-history__channels {
-  grid-column: 2;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.08);
+  color: var(--ds-color-text);
+  letter-spacing: 0.01em;
 }
 
 @media (max-width: 900px) {
@@ -99,7 +149,16 @@
     grid-template-columns: 1fr;
   }
 
-  .product-config-history__channels {
-    grid-column: auto;
+  .product-config-history {
+    max-height: calc(100vh - 280px);
+  }
+
+  .product-config-history__field {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+
+  .product-config-history__channels-box {
+    width: 100%;
   }
 }
