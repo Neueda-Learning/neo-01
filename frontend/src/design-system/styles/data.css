@@ -197,6 +197,7 @@
   grid-template-columns: minmax(0, var(--ds-bars-label, 200px)) minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--ds-space-3);
+  padding: calc((var(--ds-bars-height, 18px) - 18px) / 2) 0;
 }
 
 .ds-bars__label {
@@ -208,7 +209,7 @@
 }
 
 .ds-bars__track {
-  height: 18px;
+  height: var(--ds-bars-height, 18px);
   border-radius: var(--ds-radius-sm);
   background: var(--ds-series-track);
   overflow: hidden;
