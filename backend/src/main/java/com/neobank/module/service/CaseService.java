@@ -51,22 +51,42 @@ public class CaseService {
     /**
      * Search for cases matching {@code q} against applicationId or applicant fullName.
      * When {@code q} is absent or blank, returns all records newest-first (still capped).
+     * When {@code outcome} is provided, filters to records with that outcome.
      *
-     * @param q     applicationId fragment or applicant name; {@code null}/{@code ""} → all records
-     * @param limit maximum rows to return; capped at {@value #DEFAULT_LIMIT}
-     * @return map with {@code "cases"} (list of {@link CaseSearchResult}) and {@code "more"} (boolean)
+     * @param q       applicationId fragment or applicant name; {@code null}/{@code ""} → all records
+     * @param limit   maximum rows to return; capped at {@value #DEFAULT_LIMIT}
+     * @param outcome outcome filter (PASSED/FAILED/REVIEW/All or null); null/All → no filter
+     * @return map with {@code "cases"} (list of {@link CaseSearchResult}), {@code "more"} (boolean),
+     *         and {@code "counts"} (total counts per status)
      */
-    public Map<String, Object> search(String q, int limit) {
+    public Map<String, Object> search(String q, int limit, String outcome) {
         int cap = Math.min(limit, DEFAULT_LIMIT);
         Pageable pageable = PageRequest.of(0, cap + 1, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        if (q == null || q.isBlank()) {
-            List<VerificationRecord> all = cases.findAll(pageable).getContent();
-            return toResponse(all, cap);
-        }
+        boolean hasOutcome = outcome != null && !outcome.isBlank() && !"All".equalsIgnoreCase(outcome);
 
-        List<VerificationRecord> hits = cases.searchByIdOrName(q, pageable);
-        return toResponse(hits, cap);
+        List<VerificationRecord> rows;
+        if (!hasOutcome) {
+            if (q == null || q.isBlank()) {
+                rows = cases.findAll(pageable).getContent();
+            } else {
+                rows = cases.searchByIdOrName(q, pageable);
+            }
+        } else {
+            if (q == null || q.isBlank()) {
+                rows = cases.findByOutcomeOrderByCreatedAtDesc(outcome, pageable);
+            } else {
+                rows = cases.searchByIdOrNameAndOutcome(q, outcome, pageable);
+            }
+        }
+        return toResponse(rows, cap);
+    }
+
+    /**
+     * Convenience overload: search without outcome filter.
+     */
+    public Map<String, Object> search(String q, int limit) {
+        return search(q, limit, null);
     }
 
     /**
@@ -145,13 +165,19 @@ public class CaseService {
                 .limit(cap)
                 .map(CaseSearchResult::of)
                 .toList();
-        return response(results, more);
+        Map<String, Long> counts = Map.of(
+                "All", cases.count(),
+                "PASSED", cases.countByOutcome("PASSED"),
+                "FAILED", cases.countByOutcome("FAILED"),
+                "REVIEW", cases.countByOutcome("REVIEW"));
+        return response(results, more, counts);
     }
 
-    private static Map<String, Object> response(List<CaseSearchResult> cases, boolean more) {
+    private static Map<String, Object> response(List<CaseSearchResult> cases, boolean more, Map<String, Long> counts) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("cases", cases);
         body.put("more", more);
+        body.put("counts", counts);
         return body;
     }
 }

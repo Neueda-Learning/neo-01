@@ -42,10 +42,11 @@ export const api = {
   listApplications: () => request('/api/v1/applications'),
   getApplication: (id) => request(`/api/v1/applications/${id}`),
   getCaseDetail: (applicationId) => request(`/cases/${applicationId}`),
-  searchCases: (q = '', limit = 10) => {
+  searchCases: (q = '', limit = 10, outcome = null) => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     if (limit != null) params.set('limit', String(limit));
+    if (outcome && outcome !== 'All') params.set('outcome', outcome);
     const query = params.toString();
     return request(`/cases${query ? `?${query}` : ''}`);
   },

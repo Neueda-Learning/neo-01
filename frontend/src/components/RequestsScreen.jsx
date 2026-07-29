@@ -105,7 +105,7 @@ function mapLiveApplicant(payload) {
  * screen's rules, a toolbar that narrows, a capped table. The 10-row cap and its footnote come from
  * DataTable — no screen re-implements them.
  */
-export default function RequestsScreen({ requests, more, error, loading, onLoad }) {
+export default function RequestsScreen({ requests, more, error, loading, onLoad, counts }) {
   const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
@@ -124,21 +124,12 @@ export default function RequestsScreen({ requests, more, error, loading, onLoad 
     }
   }, [requests.length]);
 
-  const counts = useMemo(() => {
-    const next = { All: requests.length };
-    for (const row of requests) {
-      const outcome = toDecisionLabel(row.status);
-      next[outcome] = (next[outcome] ?? 0) + 1;
-    }
-    return next;
-  }, [requests]);
-
-  const matches = useMemo(() => {
+  // First: filter by query and date (ignoring status tab) to get all matching results
+  const allMatches = useMemo(() => {
     if (!hasAsked) return [];
 
     const needle = query.trim().toLowerCase();
     return requests.filter((r) => {
-      if (filter !== 'All' && toDecisionLabel(r.status) !== filter) return false;
       const createdDate = r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : null;
       if (createdDate && fromDate && createdDate < fromDate) return false;
       if (createdDate && toDate && createdDate > toDate) return false;
@@ -147,7 +138,26 @@ export default function RequestsScreen({ requests, more, error, loading, onLoad 
       const applicantName = (r.fullName ?? '').toLowerCase();
       return r.applicationId.toLowerCase().includes(needle) || applicantName.includes(needle);
     });
-  }, [requests, query, filter, fromDate, toDate, hasAsked]);
+  }, [requests, query, fromDate, toDate, hasAsked]);
+
+  // Use backend-provided total counts (from DB, independent of search filter)
+  const badgeCounts = useMemo(() => {
+    if (counts && Object.keys(counts).length > 0) {
+      return counts;
+    }
+    // Fallback: compute from filtered results (e.g. when backend doesn't provide counts)
+    const next = { All: allMatches.length };
+    for (const row of allMatches) {
+      const outcome = toDecisionLabel(row.status);
+      next[outcome] = (next[outcome] ?? 0) + 1;
+    }
+    return next;
+  }, [counts, allMatches]);
+
+  // Then: use results as-is (backend already filtered by status)
+  const matches = useMemo(() => {
+    return allMatches;
+  }, [allMatches]);
 
   useEffect(() => {
     if (!hasAsked) return undefined;
@@ -340,7 +350,7 @@ export default function RequestsScreen({ requests, more, error, loading, onLoad 
             onSuccess={() => {
               // Refresh case detail after successful override
               setRefreshTrigger((prev) => prev + 1);
-              void onLoad(query);
+              void onLoad(query, filter);
             }}
           />
         )}
@@ -371,7 +381,7 @@ export default function RequestsScreen({ requests, more, error, loading, onLoad 
               setQueryInput(value);
               setQuery(value);
               setHasAsked(true);
-              void onLoad(value);
+              void onLoad(value, filter);
             }}
             aria-label="Search application id or applicant name"
           />
@@ -383,8 +393,9 @@ export default function RequestsScreen({ requests, more, error, loading, onLoad 
             onChange={(next) => {
               setFilter(next);
               setHasAsked(true);
+              void onLoad(query, next);
             }}
-            counts={counts}
+            counts={badgeCounts}
           />
         </Toolbar.Group>
         <Toolbar.Spacer />
@@ -410,38 +421,47 @@ export default function RequestsScreen({ requests, more, error, loading, onLoad 
         </Toolbar.Group>
       </Toolbar>
 
-      <DataTable
-        className="verification-board-results"
-        columns={columns}
-        rows={matches}
-        total={matches.length + (more ? 1 : 0)}
-        rowKey={(r) => r.applicationId}
-        onRowClick={(row) => setSelectedApplicationId(row.applicationId)}
-        footnote="newest first"
-        empty={
-          <EmptyState
-            title={
-              !hasAsked
-                ? 'Search for an applicant to begin'
-                : requests.length === 0
-                  ? 'Nothing received yet'
-                  : 'No application matches that'
-            }
-          >
-            {!hasAsked ? (
-              <>Boards start empty on purpose — nothing is fetched until you ask.</>
-            ) : requests.length === 0 ? (
-              <>
-                Send one from the <strong>sidecar</strong> at <strong>localhost:9000</strong>, or turn
-                the generator on in the orchestrator UI. Nothing in this screen sends applications —
-                this module is called, it does not call itself.
-              </>
-            ) : (
-              <>Clear the search, or pick a different status.</>
-            )}
-          </EmptyState>
-        }
-      />
+      <div style={{ display: 'grid', gap: 'var(--ds-space-4)' }}>
+        <DataTable
+          className="verification-board-results"
+          columns={columns}
+          rows={matches.slice(0, 10)}
+          total={matches.length}
+          rowKey={(r) => r.applicationId}
+          onRowClick={(row) => setSelectedApplicationId(row.applicationId)}
+          footnote="newest first"
+          empty={
+            <EmptyState
+              title={
+                !hasAsked
+                  ? 'Search for an applicant to begin'
+                  : requests.length === 0
+                    ? 'Nothing received yet'
+                    : 'No application matches that'
+              }
+            >
+              {!hasAsked ? (
+                <>Boards start empty on purpose — nothing is fetched until you ask.</>
+              ) : requests.length === 0 ? (
+                <>
+                  Send one from the <strong>sidecar</strong> at <strong>localhost:9000</strong>, or turn
+                  the generator on in the orchestrator UI. Nothing in this screen sends applications —
+                  this module is called, it does not call itself.
+                </>
+              ) : (
+                <>Clear the search, or pick a different status.</>
+              )}
+            </EmptyState>
+          }
+        />
+        {badgeCounts[filter] > 10 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', paddingRight: 'var(--ds-space-4)' }}>
+            <Caption style={{ color: 'var(--ds-color-text-muted)' }}>
+              showing 10 of {badgeCounts[filter]} · more in database
+            </Caption>
+          </div>
+        )}
+      </div>
     </>
   );
 }

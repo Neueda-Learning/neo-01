@@ -17,11 +17,12 @@ export default function App() {
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [error, setError] = useState(null);
   const [boardMore, setBoardMore] = useState(false);
+  const [counts, setCounts] = useState({});
 
-  const reload = useCallback(async (query = '') => {
+  const reload = useCallback(async (query = '', outcome = null) => {
     setLoadingRequests(true);
     try {
-      const result = await api.searchCases(query, 10);
+      const result = await api.searchCases(query, 10, outcome);
       const rows = Array.isArray(result?.cases) ? result.cases : [];
       setRequests(
         rows.map((row) => ({
@@ -34,11 +35,13 @@ export default function App() {
         }))
       );
       setBoardMore(Boolean(result?.more));
+      setCounts(result?.counts || {});
       setError(null);
     } catch (e) {
       setError(e.message);
       setRequests([]);
       setBoardMore(false);
+      setCounts({});
     } finally {
       setLoadingRequests(false);
     }
@@ -46,7 +49,7 @@ export default function App() {
 
   useEffect(() => {
     if (screen !== 'verification-board') return;
-    void reload('');
+    void reload('', 'All');
   }, [screen, reload]);
 
   return (
@@ -61,6 +64,7 @@ export default function App() {
           error={error}
           loading={loadingRequests}
           onLoad={reload}
+          counts={counts}
         />
       )}
 

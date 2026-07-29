@@ -63,6 +63,30 @@
   max-height: calc(100vh - 320px);
   overflow-y: auto;
   padding-right: var(--ds-space-2);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(107, 114, 128, 0.35) transparent;
+}
+
+/* Chrome, Safari 滚动条 */
+.product-config-history::-webkit-scrollbar {
+  width: 8px;
+}
+
+.product-config-history::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.product-config-history::-webkit-scrollbar-thumb {
+  background: rgba(107, 114, 128, 0.35);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.product-config-history::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.6);
+  box-shadow: 0 0 6px rgba(107, 114, 128, 0.3);
 }
 
 .product-config-history__row {

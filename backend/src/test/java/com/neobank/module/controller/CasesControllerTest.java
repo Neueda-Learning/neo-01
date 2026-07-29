@@ -3,6 +3,7 @@ package com.neobank.module.controller;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.startsWith;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -43,7 +44,7 @@ class CasesControllerTest {
 
     @Test
     void emptyByDefaultWhenNoQueryIsGiven() throws Exception {
-        when(caseService.search(isNull(), anyInt()))
+        when(caseService.search(isNull(), anyInt(), isNull()))
                 .thenReturn(Map.of("cases", List.of(), "more", false));
 
         mvc.perform(get("/cases"))
@@ -56,7 +57,7 @@ class CasesControllerTest {
     void returnsMatchingCasesForAnIdQuery() throws Exception {
         CaseSearchResult row = new CaseSearchResult("SIM-01", null, Instant.parse("2026-07-21T21:40:00Z"),
                 "PASSED", 1);
-        when(caseService.search(eq("SIM-01"), anyInt()))
+        when(caseService.search(eq("SIM-01"), anyInt(), isNull()))
                 .thenReturn(Map.of("cases", List.of(row), "more", false));
 
         mvc.perform(get("/cases").param("q", "SIM-01"))
@@ -70,7 +71,7 @@ class CasesControllerTest {
 
     @Test
     void flagsMoreWhenResultsExceedLimit() throws Exception {
-        when(caseService.search(eq("SIM"), anyInt()))
+        when(caseService.search(eq("SIM"), anyInt(), isNull()))
                 .thenReturn(Map.of("cases", List.of(), "more", true));
 
         mvc.perform(get("/cases").param("q", "SIM"))
@@ -80,7 +81,7 @@ class CasesControllerTest {
 
     @Test
     void emptyListWhenNoMatchesFound() throws Exception {
-        when(caseService.search(eq("nobody"), anyInt()))
+        when(caseService.search(eq("nobody"), anyInt(), isNull()))
                 .thenReturn(Map.of("cases", List.of(), "more", false));
 
         mvc.perform(get("/cases").param("q", "nobody"))
@@ -91,7 +92,7 @@ class CasesControllerTest {
     @Test
     void nameLookupPassesThroughToService() throws Exception {
         CaseSearchResult row = new CaseSearchResult("app-1234", "Maria Chen", Instant.now(), "PASSED", 0);
-        when(caseService.search(eq("Maria"), anyInt()))
+        when(caseService.search(eq("Maria"), anyInt(), isNull()))
                 .thenReturn(Map.of("cases", List.of(row), "more", false));
 
         mvc.perform(get("/cases").param("q", "Maria"))
