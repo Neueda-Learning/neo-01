@@ -325,9 +325,17 @@ export default function RequestsScreen({ requests, more, error, loading, onLoad,
                   title={rule.title}
                   headEnd={<Badge tone={toneForDecisionLabel(rule.outcome)}>{rule.outcome}</Badge>}
                 >
-                  {Array.isArray(rule.reasons) && rule.reasons.length > 0
-                    ? rule.reasons.join(' | ')
-                    : 'No reason supplied'}
+                  {Array.isArray(rule.reasons) && rule.reasons.length > 0 ? (
+                    <div>
+                      {rule.reasons.map((reason, idx) => (
+                        <div key={idx} style={{ marginBottom: idx < rule.reasons.length - 1 ? '8px' : '0' }}>
+                          {reason}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    'No reason supplied'
+                  )}
                 </Card>
               ))}
           </div>
