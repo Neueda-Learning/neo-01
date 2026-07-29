@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, Button, TextInput, Checkbox, Alert, Spinner, Select } from '../design-system';
+import React, { useState } from 'react';
+import { Modal, Button, TextInput, Checkbox, Alert, Spinner } from '../design-system';
 import { api } from '../api.js';
 
 const CHANNELS = ['WEB', 'MOBILE_APP', 'BRANCH', 'PHONE'];
@@ -150,7 +150,7 @@ export default function NewProductVersionModal({ productCode, onClose, onSuccess
             onChange={(e) => setActive(e.target.checked)}
             disabled={loading}
           />
-          <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Active</span>
+          <span style={{ fontSize: '0.9375rem' }}>Active</span>
         </label>
       </div>
     </Modal>

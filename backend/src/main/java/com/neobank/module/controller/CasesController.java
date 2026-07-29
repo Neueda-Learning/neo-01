@@ -41,14 +41,19 @@ public class CasesController {
      * Omit {@code q} and the response is {@code {"cases":[],"more":false}} — the board is empty
      * until the user types.</p>
      *
-     * @param q     applicationId fragment or applicant name; absent → empty result
-     * @param limit maximum rows; defaults to and is capped at 10
+     * <p>Pass {@code outcome} to filter by status (PASSED/FAILED/REVIEW). Omit or set to All
+     * for all statuses.</p>
+     *
+     * @param q       applicationId fragment or applicant name; absent → empty result
+     * @param limit   maximum rows; defaults to and is capped at 10
+     * @param outcome outcome filter (PASSED/FAILED/REVIEW/All); absent → all statuses
      */
     @GetMapping
     public Map<String, Object> search(
             @RequestParam(required = false) String q,
-            @RequestParam(defaultValue = "10") int limit) {
-        return caseService.search(q, limit);
+            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(required = false) String outcome) {
+        return caseService.search(q, limit, outcome);
     }
 
     @GetMapping("/{id}/applicant")

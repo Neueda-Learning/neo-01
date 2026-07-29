@@ -20,6 +20,15 @@ public interface VerificationRecordRepository extends JpaRepository<Verification
             + "ORDER BY v.createdAt DESC")
     List<VerificationRecord> searchByIdOrName(@Param("q") String q, Pageable pageable);
 
+    @Query("SELECT v FROM VerificationRecord v WHERE "
+            + "v.outcome = :outcome "
+            + "AND (LOWER(v.applicationId) LIKE LOWER(CONCAT('%', :q, '%')) "
+            + "OR LOWER(v.fullName) LIKE LOWER(CONCAT('%', :q, '%'))) "
+            + "ORDER BY v.createdAt DESC")
+    List<VerificationRecord> searchByIdOrNameAndOutcome(@Param("q") String q, @Param("outcome") String outcome, Pageable pageable);
+
+    List<VerificationRecord> findByOutcomeOrderByCreatedAtDesc(String outcome, Pageable pageable);
+
     /**
      * Return all records with non-null {@code ruleResults} within the half-open instant window
      * — UC-04. The full entity is returned so the service can derive {@code kind} from
@@ -33,4 +42,6 @@ public interface VerificationRecordRepository extends JpaRepository<Verification
             + "WHERE v.createdAt >= :from AND v.createdAt < :to "
             + "AND v.ruleResults IS NOT NULL")
     List<VerificationRecord> findRecordsInWindow(@Param("from") Instant from, @Param("to") Instant to);
+
+    long countByOutcome(String outcome);
 }
