@@ -73,11 +73,13 @@ public class ReasonCodeService {
     }
 
     /**
-     * Parse one {@code ruleResults} JSON string and return all reason codes found.
+     * Parse one {@code ruleResults} JSON string and return reason codes only from FAILED rules.
      * Supports both formats: {@code reasonCodes} array (current) and {@code reasonCode} scalar (legacy).
+     * Only processes rules where {@code passed} is false (or {@code pass} for legacy records).
+     * Filters out "VER_ALL_CHECKS_PASSED" marker which appears when all checks pass.
      * Malformed JSON is silently skipped so a corrupt row never prevents the endpoint from returning.
      *
-     * @return list of reason code strings; empty on null, blank, or malformed input
+     * @return list of reason code strings from failed rules; empty on null, blank, or malformed input
      */
     static List<String> extractCodes(String ruleResults) {
         if (ruleResults == null || ruleResults.isBlank()) return List.of();
@@ -86,22 +88,45 @@ public class ReasonCodeService {
             List<String> codes = new java.util.ArrayList<>();
             
             for (Map<String, Object> rule : rules) {
+                // Only process failed rules: check both "passed" (new) and "pass" (legacy) fields
+                Object passedObj = rule.get("passed");
+                Object passObj = rule.get("pass");
+                
+                Boolean passed = null;
+                if (passedObj instanceof Boolean) {
+                    passed = (Boolean) passedObj;
+                } else if (passObj instanceof Boolean) {
+                    passed = (Boolean) passObj;
+                }
+                
+                // Skip if rule passed (only process failed rules)
+                if (Boolean.TRUE.equals(passed)) {
+                    continue;
+                }
+                
                 // Current format: reasonCodes array
                 Object reasonCodesObj = rule.get("reasonCodes");
                 if (reasonCodesObj instanceof List) {
                     ((List<?>) reasonCodesObj).stream()
                             .filter(c -> c != null && !c.toString().isBlank())
                             .map(Object::toString)
+                            .filter(code -> !"VER_ALL_CHECKS_PASSED".equals(code))
                             .forEach(codes::add);
                 } else if (reasonCodesObj != null && !reasonCodesObj.toString().isBlank()) {
                     // Single value fallback
-                    codes.add(reasonCodesObj.toString());
+                    String code = reasonCodesObj.toString();
+                    if (!"VER_ALL_CHECKS_PASSED".equals(code)) {
+                        codes.add(code);
+                    }
                 }
                 
                 // Legacy format: reasonCode scalar
                 Object reasonCodeObj = rule.get("reasonCode");
                 if (reasonCodeObj != null && !reasonCodeObj.toString().isBlank()) {
-                    codes.add(reasonCodeObj.toString());
+                    String code = reasonCodeObj.toString();
+                    if (!"VER_ALL_CHECKS_PASSED".equals(code)) {
+                        codes.add(code);
+                    }
                 }
             }
             
