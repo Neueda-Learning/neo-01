@@ -168,6 +168,10 @@
 
   /* -- Data series -------------------------------------------------------- */
   --ds-series-1: var(--havn-mint-deep);
+  --ds-series-1-lighter: rgba(95, 224, 172, 0.4);
+  --ds-series-1-light: rgba(95, 224, 172, 0.6);
+  --ds-series-1-dark: rgba(47, 164, 127, 0.85);
+  --ds-series-1-darker: rgba(31, 106, 81, 0.95);
   --ds-series-2: #3f7cbe;
   --ds-series-3: #a8bf1f;
   --ds-series-4: var(--havn-declined);

@@ -13,99 +13,6 @@ import {
 import { api } from '../api.js';
 import NewProductVersionModal from './NewProductVersionModal.jsx';
 
-const MOCK_PRODUCT_ROWS = [
-  {
-    productCode: 'CREDIT_CARD_REWARDS',
-    version: 'v4',
-    minAge: 20,
-    limitRange: '2,000-15,000',
-    active: false,
-    channels: 'WEB·BR',
-  },
-  {
-    productCode: 'CREDIT_CARD_STANDARD',
-    version: 'v1',
-    minAge: 18,
-    limitRange: '500-5,000',
-    active: true,
-    channels: 'WEB·MOB',
-  },
-  {
-    productCode: 'CREDIT_CARD_STUDENT',
-    version: 'v1',
-    minAge: 18,
-    limitRange: '500-3,000',
-    active: true,
-    channels: 'WEB·MOB',
-  },
-];
-
-const MOCK_VERSION_HISTORY = {
-  CREDIT_CARD_STANDARD: [
-    {
-      version: 'v1',
-      meta: 'current',
-      minAge: 18,
-      creditLimitMin: 500,
-      creditLimitMax: 5000,
-      active: true,
-      channels: 'channels WEB/MOBILE_APP',
-      current: true,
-    },
-  ],
-  CREDIT_CARD_REWARDS: [
-    {
-      version: 'v4',
-      meta: 'current',
-      minAge: 20,
-      creditLimitMin: 2000,
-      creditLimitMax: 15000,
-      active: false,
-      channels: 'channels WEB/BRANCH',
-      current: true,
-    },
-    {
-      version: 'v3',
-      meta: '2026-07-03',
-      minAge: 19,
-      creditLimitMin: 1500,
-      creditLimitMax: 12000,
-      active: true,
-      channels: 'channels WEB/MOBILE_APP/BRANCH/PHONE',
-    },
-    {
-      version: 'v2',
-      meta: '2026-07-02',
-      minAge: 18,
-      creditLimitMin: 1200,
-      creditLimitMax: 11000,
-      active: true,
-      channels: 'channels WEB/MOBILE_APP/BRANCH',
-    },
-    {
-      version: 'v1',
-      meta: '2026-07-01',
-      minAge: 18,
-      creditLimitMin: 1000,
-      creditLimitMax: 10000,
-      active: true,
-      channels: 'channels WEB/MOBILE_APP/BRANCH',
-    },
-  ],
-  CREDIT_CARD_STUDENT: [
-    {
-      version: 'v1',
-      meta: 'current',
-      minAge: 18,
-      creditLimitMin: 500,
-      creditLimitMax: 3000,
-      active: true,
-      channels: 'channels WEB/MOBILE',
-      current: true,
-    },
-  ],
-};
-
 function HistoryField({ label, value }) {
   return (
     <div className="product-config-history__field">
@@ -116,9 +23,9 @@ function HistoryField({ label, value }) {
 }
 
 export default function ProductConfigurationScreen() {
-  const [selectedProductCode, setSelectedProductCode] = useState('CREDIT_CARD_REWARDS');
-  const [productRows, setProductRows] = useState(MOCK_PRODUCT_ROWS);
-  const [versionHistory, setVersionHistory] = useState(MOCK_VERSION_HISTORY);
+  const [selectedProductCode, setSelectedProductCode] = useState(null);
+  const [productRows, setProductRows] = useState([]);
+  const [versionHistory, setVersionHistory] = useState({});
   const [loadError, setLoadError] = useState(null);
   const [showNewVersionModal, setShowNewVersionModal] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -173,16 +80,16 @@ export default function ProductConfigurationScreen() {
           .filter(Boolean);
 
         setVersionHistory(nextHistory);
-        setProductRows(nextRows.length > 0 ? nextRows : MOCK_PRODUCT_ROWS);
+        setProductRows(nextRows);
         setSelectedProductCode((current) =>
-          nextHistory[current] ? current : nextRows[0]?.productCode ?? 'CREDIT_CARD_REWARDS'
+          nextHistory[current] ? current : nextRows[0]?.productCode ?? null
         );
         setLoadError(null);
       } catch (e) {
         if (cancelled) return;
-        setProductRows(MOCK_PRODUCT_ROWS);
-        setVersionHistory(MOCK_VERSION_HISTORY);
-        setSelectedProductCode('CREDIT_CARD_REWARDS');
+        setProductRows([]);
+        setVersionHistory({});
+        setSelectedProductCode(null);
         setLoadError(e.message);
       }
     }
@@ -239,28 +146,32 @@ export default function ProductConfigurationScreen() {
           >
             <div className="product-config-history">
               {selectedHistory.map((entry) => (
-                <div key={`${selectedProductCode}-${entry.version}`} className="product-config-history__row">
-                  <div className="product-config-history__meta">
+                <div key={`${selectedProductCode}-${entry.version}`} className="product-config-history__card">
+                  <div className="product-config-history__card-version">
                     {entry.version} · {entry.meta}
                   </div>
-                          <div className="product-config-history__details">
-                            <HistoryField label="Age" value={entry.minAge} />
-                            <HistoryField
-                              label="Credit Limit Min"
-                              value={entry.creditLimitMin?.toLocaleString('en-GB')}
-                            />
-                            <HistoryField
-                              label="Credit Limit Max"
-                              value={entry.creditLimitMax?.toLocaleString('en-GB')}
-                            />
-                            <HistoryField label="Active" value={entry.active ? 'Yes' : 'No'} />
-                            {entry.channels && (
-                              <div className="product-config-history__channels-box">
-                                <span className="product-config-history__field-label">Channels</span>
-                                <div className="product-config-history__channels">{entry.channels}</div>
-                              </div>
-                            )}
-                          </div>
+                  <div className="product-config-history__card-content">
+                    <div className="product-config-history__row-1">
+                      <HistoryField label="Age" value={entry.minAge} />
+                      <HistoryField
+                        label="Credit Limit Min"
+                        value={entry.creditLimitMin?.toLocaleString('en-GB')}
+                      />
+                    </div>
+                    <div className="product-config-history__row-2">
+                      <HistoryField
+                        label="Credit Limit Max"
+                        value={entry.creditLimitMax?.toLocaleString('en-GB')}
+                      />
+                      <HistoryField label="Active" value={entry.active ? 'Yes' : 'No'} />
+                    </div>
+                    {entry.channels && (
+                      <div className="product-config-history__channels-box">
+                        <span className="product-config-history__field-label">Channels</span>
+                        <div className="product-config-history__channels">{entry.channels}</div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
