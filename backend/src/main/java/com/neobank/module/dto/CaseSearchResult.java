@@ -37,18 +37,22 @@ public record CaseSearchResult(
     }
 
     /**
-     * Deserialises {@code ruleResults} — expected shape:
-     * {@code [{"rule":"min_age","pass":true}, {"rule":"limit_range","pass":false}]}.
+     * Deserialises {@code ruleResults} and counts total reason codes across all rules,
+     * excluding "VER_ALL_CHECKS_PASSED" which appears only when all checks pass.
+     * Expected shape: {@code [{"ruleName":"wellFormedness","pass":false,"reasonCodes":["VER_MISSING_FIELD","VER_INVALID_FIELD"]}, ...]}.
      *
-     * @return number of entries where {@code "pass"} is {@code false}; 0 on null, blank, or
-     *         malformed JSON so a broken rule store never prevents the row from rendering.
+     * @return total count of reasonCodes across all rules, excluding VER_ALL_CHECKS_PASSED;
+     *         0 on null, blank, or malformed JSON
      */
     static int countFailedRules(String ruleResults) {
         if (ruleResults == null || ruleResults.isBlank()) return 0;
         try {
             List<Map<String, Object>> rules = MAPPER.readValue(ruleResults, RULE_LIST);
             return (int) rules.stream()
-                    .filter(r -> Boolean.FALSE.equals(r.get("passed")))
+                    .map(r -> r.get("reasonCodes"))
+                    .filter(rc -> rc instanceof List)
+                    .flatMap(rc -> ((List<?>) rc).stream())
+                    .filter(code -> code instanceof String && !"VER_ALL_CHECKS_PASSED".equals(code))
                     .count();
         } catch (Exception e) {
             return 0;
