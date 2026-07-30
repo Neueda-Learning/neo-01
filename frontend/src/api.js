@@ -77,23 +77,11 @@ export const api = {
       body: JSON.stringify(createProductVersionRequest),
     }),
 
-  // Get applicant details from the orchestrator
-  getApplicantFromOrchestrator: async (applicationId) => {
-    const orchestratorUrl = import.meta.env.VITE_ORCHESTRATOR_URL || 
-      'http://neobank-dev-571740187.ap-southeast-1.elb.amazonaws.com';
-    try {
-      const res = await fetch(`${orchestratorUrl}/api/v1/applications/${applicationId}`, {
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!res.ok) {
-        const error = new Error(`HTTP ${res.status}`);
-        error.status = res.status;
-        throw error;
-      }
-      return res.json();
-    } catch (e) {
-      // If orchestrator URL fails, try the fallback local backend endpoint
-      return request(`/api/v1/applications/${applicationId}`);
-    }
-  },
+  // Get applicant details from the orchestrator, via this module's own backend
+  // (GET /cases/{id}/applicant) — same-origin, and the backend is what actually
+  // holds the orchestrator connection. A direct cross-origin fetch from the
+  // browser to the orchestrator doesn't belong here: it hardcodes one
+  // environment's address and runs into real CORS the moment it's anything else.
+  getApplicantFromOrchestrator: (applicationId) =>
+    request(`/cases/${applicationId}/applicant`),
 };
